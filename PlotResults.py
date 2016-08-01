@@ -12,20 +12,20 @@ def PlotAll(SaveNames,params):
     ## plotting params 
     # what to plot 
     plot_activities=True
-    plot_shapes_projections=False
-    plot_shapes_slices=True
+    plot_shapes_projections=True
+    plot_shapes_slices=False
     plot_activityCorrs=False
     plot_clustered_shape=False
     plot_residual_slices=False
     plot_residual_projections=False
     # videos to generate
     video_shapes=False
-    video_residual=False
+    video_residual=True
     video_slices=False
     # what to save
     save_video=True
     save_plot=True
-    close_figs=False#close all figs right after saving (to avoid memory overload)
+    close_figs=True#close all figs right after saving (to avoid memory overload)
     # PostProcessing   
     Split=False   
     Threshold=False #threshold shapes in the end and keep only connected components
@@ -33,7 +33,7 @@ def PlotAll(SaveNames,params):
     IncludeBackground=False #should we include the background as an extracted component?
     
     # how to plot
-    scale=0.5 #scale colormap to enhance colors
+    scale=2 #scale colormap to enhance colors
     dpi=500 #for videos
     restrict_support=True #in shape video, zero out data outside support of shapes
     C=4 #number of components to show in shape videos (if larger then number of shapes L, then we automatically set C=L)
@@ -44,6 +44,31 @@ def PlotAll(SaveNames,params):
     if params.SuperVoxelize==True:
         data=SuperVoxelize(data)
     dims=np.shape(data)
+    
+    if len(dims)<4:
+        plot_Shapes2D=False
+        video_residual_2D=False
+        if plot_shapes_projections or plot_shapes_slices:
+            plot_Shapes2D=True
+        
+        if video_residual==True:
+            video_residual_2D=True
+    
+        plot_shapes_projections=False
+        plot_shapes_slices=False
+        plot_activityCorrs=False
+        plot_clustered_shape=False
+        plot_residual_slices=False
+        plot_residual_projections=False
+        video_shapes=False
+        video_residual=False
+        video_slices=False
+        print '2D data, ignoring 3D plots/video options'
+    else:
+        plot_Shapes2D=False
+        video_residual_2D=False
+
+    
     min_dim=np.argmin(dims[1:])
     denoised_data=0
     residual=data
@@ -150,6 +175,57 @@ def PlotAll(SaveNames,params):
             pp.close()
             if close_figs:
                 plt.close('all')
+                
+        #%%  2D shapes
+        transpose_shape= True # should we transpose shape
+        ComponentsInFig=3 # number of components in Figure
+        index=0 #component display index
+        
+        if plot_Shapes2D:            
+            if save_plot==True:
+                pp = PdfPages(Results_folder + 'Shapes2D'+resultsName+'.pdf')
+            fig=plt.figure(figsize=(18 , 11))
+            for ll in range(L+adaptBias):
+                ax = plt.subplot(a,b,ll+1)  
+                temp=shapes[ll]
+                mi=np.min(shapes[ll])
+                ma=np.max(shapes[ll])*0.3
+                im=plt.imshow(temp,vmin=mi,vmax=ma,cmap=color_map)
+                plt.setp(ax,xticks=[],yticks=[])
+                mn=int(np.floor(mi))        # colorbar min value
+                mx=int(np.ceil(ma))         # colorbar max value
+                md=(mx-mn)/2
+                divider = make_axes_locatable(ax)
+                cax = divider.append_axes("right", size="5%", pad=0.05)
+                cb=plt.colorbar(im,cax=cax)
+#                    cb.set_ticks([mn,md,mx])
+#                    cb.set_ticklabels([mn,md,mx])
+                
+                # component number
+                ax.text(0.02, 0.8, str(ll),
+                verticalalignment='bottom', horizontalalignment='left',
+                transform=ax.transAxes,
+                color='white',weight='bold', fontsize=13)
+                #sparsity
+                spar_str=str(np.round(np.mean(shapes[ll]>0)*100,2))+'%'
+                ax.text(0.02, 0.02, spar_str,
+                verticalalignment='bottom', horizontalalignment='left',
+                transform=ax.transAxes,
+                color='white',weight='bold', fontsize=13)
+#                    #L^p
+#                    for p in range(2,2,2):
+#                        Lp=(np.sum(shapes[ll]**p))**(1/float(p))/np.sum(shapes[ll])
+#                        Lp_str=str(np.round(Lp*100,2))+'%' #'L'+str(p)+'='+
+#                        ax.text(0.02+p*0.2, 0.02, Lp_str,
+#                        verticalalignment='bottom', horizontalalignment='left',
+#                        transform=ax.transAxes,
+#                        color='yellow',weight='bold', fontsize=13)
+            plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+            if save_plot==True:
+                pp.savefig(fig)            
+            pp.close()
+            if close_figs:
+                plt.close('all')
 
         #%%  All Shapes projections
         if plot_shapes_projections:
@@ -173,8 +249,8 @@ def PlotAll(SaveNames,params):
                     divider = make_axes_locatable(ax)
                     cax = divider.append_axes("right", size="5%", pad=0.05)
                     cb=plt.colorbar(im,cax=cax)
-                    cb.set_ticks([mn,md,mx])
-                    cb.set_ticklabels([mn,md,mx])
+#                    cb.set_ticks([mn,md,mx])
+#                    cb.set_ticklabels([mn,md,mx])
                     
                     # component number
                     ax.text(0.02, 0.8, str(ll),
@@ -182,11 +258,11 @@ def PlotAll(SaveNames,params):
                     transform=ax.transAxes,
                     color='white',weight='bold', fontsize=13)
 #                    #sparsity
-#                    spar_str=str(np.round(np.mean(shapes[ll]>0)*100,2))+'%'
-#                    ax.text(0.02, 0.02, spar_str,
-#                    verticalalignment='bottom', horizontalalignment='left',
-#                    transform=ax.transAxes,
-#                    color='white',weight='bold', fontsize=13)
+                    spar_str=str(np.round(np.mean(shapes[ll]>0)*100,2))+'%'
+                    ax.text(0.02, 0.02, spar_str,
+                    verticalalignment='bottom', horizontalalignment='left',
+                    transform=ax.transAxes,
+                    color='white',weight='bold', fontsize=13)
 #                    #L^p
 #                    for p in range(2,2,2):
 #                        Lp=(np.sum(shapes[ll]**p))**(1/float(p))/np.sum(shapes[ll])
@@ -204,7 +280,9 @@ def PlotAll(SaveNames,params):
         #for ll in range(L+adaptBias):
         #    print 'Sparsity=',np.mean(shapes[ll]>0)
                 
-        #%%  All Shapes slices        
+       
+       
+       #%%  All Shapes slices        
         transpose_shape= True # should we transpose shape
         ComponentsInFig=3 # number of components in Figure
         index=0 #component display index
@@ -408,7 +486,7 @@ def PlotAll(SaveNames,params):
     
     
     #%% normalize denoised data range
-#    denoised_data=10*denoised_data/np.max(denoised_data)/scale
+#    denoised_data=denoised_data/np.max(denoised_data)
     denoised_data=denoised_data/np.percentile(denoised_data,99.5)
     denoised_data[denoised_data>1]=1
     
@@ -556,7 +634,69 @@ def PlotAll(SaveNames,params):
     #plt.xlabel('Iteration')
     #plt.ylabel('MSE')
     #plt.show()
-    
+
+
+ 
+    #%% #####  2D Video Residual    
+    if video_residual_2D:
+        fig = plt.figure(figsize=(16,7))
+        mi = min(data)
+        ma = (max(data)-min(data))/scale+min(data)
+        mi3 = 0
+        ma3 = max(residual)/scale
+
+        ii=0
+        #import colormaps as cmaps
+        #cmap=cmaps.viridis
+        cmap=color_map        
+        
+        a=1
+        b=3
+        
+        im_array=[]
+        temp=np.shape(data[ii])                   
+
+        ax1 = plt.subplot(a,b,1)            
+
+        pic=denoised_data[ii]
+        im_array += [ax1.imshow(pic,interpolation='None')]
+        ax1.set_title('Denoised')
+        plt.colorbar(im_array[-1])
+        plt.setp(ax1,xticks=[],yticks=[])
+        
+        ax2 = plt.subplot(a,b,2)
+        pic=data[ii]
+            
+        im_array += [ax2.imshow(pic, vmin=mi, vmax=ma,cmap=cmap)]
+        title=ax2.set_title('Data')            
+        plt.colorbar(im_array[-1])
+        plt.setp(ax2,xticks=[],yticks=[])
+        
+        ax3 = plt.subplot(a,b,3)            
+        pic=residual[ii]   
+        im_array += [ax3.imshow(pic, vmin=mi3, vmax=ma3,cmap=cmap)]
+        ax3.set_title('Residual')
+        plt.colorbar(im_array[-1])
+        plt.setp(ax3,xticks=[],yticks=[])
+
+#        fig.tight_layout()
+        plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+            
+        def update(ii):
+            im_array[0].set_data(denoised_data[ii])
+            im_array[1].set_data(data[ii])        
+            im_array[2].set_data(residual[ii])                     
+
+            title.set_text('Data, time = %.1f' % ii)
+        
+        if save_video==True:
+            writer = animation.writers['ffmpeg'](fps=10)
+            ani = animation.FuncAnimation(fig, update, frames=len(data), blit=False, repeat=False)
+            ani.save(Results_folder + 'Data_Denoised_Residual_2D_' +resultsName+'.mp4',dpi=dpi,writer=writer)
+        else:
+            ani = animation.FuncAnimation(fig, update, frames=len(data), blit=False, repeat=False)
+            plt.show()  
+   
     #%% #####  Video Projections Residual    
     if video_residual:
         fig = plt.figure(figsize=(16,7))
@@ -569,9 +709,6 @@ def PlotAll(SaveNames,params):
         #import colormaps as cmaps
         #cmap=cmaps.viridis
         cmap=color_map
-
-
-        
         
         spatial_dims_ind=range(len(dims)-1)
         D=len(spatial_dims_ind)

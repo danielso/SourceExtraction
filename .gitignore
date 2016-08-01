@@ -53,3 +53,7 @@ Small_Data/
 Network Trash Folder
 Temporary Items
 .apdisk
+
+#other files
+.cprof
+.lprof

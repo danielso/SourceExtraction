@@ -89,6 +89,9 @@ def GetData(data_name):
     elif data_name=='SophieVoltage3D':# check data dimenstions        
         img = tff.TiffFile(DataFolder + 'Sophie3D_drosophila_lightfield/SophieVoltageData.tif')
         data=img.asarray()   
+    elif data_name=='Sophie3DSmall':# check data dimenstions
+        img = tff.TiffFile(DataFolder + 'Sophie3D_drosophila_lightfield/Sophie3Ddata_Small.tif')
+        data=img.asarray() 
     elif data_name=='SaraSmall':
         data=load(DataFolder + 'Sara19DEC2015/SaraSmall')
     elif data_name=='Sara19DEC2015_w1t1':
@@ -101,12 +104,28 @@ def GetData(data_name):
         data=img.asarray()
         data=np.transpose(data, [0,2,3,1]) 
         data=data-np.percentile(data, 0.1, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+    elif data_name=='PhilConfocal2':
+        img= tff.TiffFile(DataFolder + 'Phil14MAR2016/confocal_diffeo.tif')
+        data=img.asarray()
+        data=np.transpose(data, [0,2,3,1]) 
+        data=data-np.percentile(data, 0.1, axis=0)# takes care of negative values (ands strong positive values) in each pixel
     elif data_name=='PhilMFM':
         img= tff.TiffFile(DataFolder + 'Phil24FEB2016/Du_che2.tif')
         data=img.asarray()
 #        data=np.asarray(data,dtype='float')  
         data=np.transpose(data, [0,2,3,1])  
-        data=data-np.percentile(data, 0.1, axis=0)# takes care of negative values (ands strong positive values) in each pixel                  
+        data=data-np.percentile(data, 0.1, axis=0)# takes care of negative values (ands strong positive values) in each pixel    
+    elif data_name=='BaylorAxonsSmall':           
+        temp=loadmat(DataFolder + 'BaylorV1Axons/data_small')
+        data=temp["data"]
+        data=np.asarray(data,dtype='float')  
+        data=np.transpose(data, [2,0,1])         
+        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+    elif data_name=='BaylorAxons':           
+        temp=h5py.File(DataFolder + 'BaylorV1Axons/animal9962session3scan4slice1frames5000.mat')
+        data=temp["X2"]
+        data=np.asarray(data,dtype='float')  
+        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
     else:
         print 'unknown dataset name!'
     return data
@@ -116,7 +135,6 @@ def GetCentersData(data,data_name,NumCent):
     from numpy import  array,percentile    
     from BlockGroupLasso import gaussian_group_lasso, GetCenters
     from pylab import load
-    import matplotlib.pyplot as plt
     import os
     import cPickle
         
@@ -145,6 +163,7 @@ def GetCentersData(data,data_name,NumCent):
             print np.shape(cent)[0]
                 
             # Plot Results
+#            import matplotlib.pyplot as plt
 #            pic_data = np.percentile(data, 95, axis=0)
 #            plt.figure(figsize=(12, 4. * data.shape[1] / data.shape[2]))
 #            ax = plt.subplot(131)
