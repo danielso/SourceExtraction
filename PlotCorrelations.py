@@ -14,7 +14,13 @@ last_rep=params.repeats
   
 for rep in range(last_rep): 
     resultsName=GetFileName(params_dict,rep)
-    results=load(resultsName)
+    try:
+        results=load('NMF_Results/'+resultsName)
+    except IOError:
+        if rep==0:
+            print 'results file not found!!'              
+        else:
+            break     
     shapes=results['shapes']
     activity=results['activity']
     if rep>params.Background_num:
@@ -52,7 +58,7 @@ for ii in range(K):
     shapes_array=shapes_array.reshape(M,-1)
     shapes_cov=np.dot(shapes_array,shapes_array.T)
     shape_vars=np.diag(shapes_cov).reshape(-1,1)
-    shapes_corr=shapes_cov/np.sqrt(np.dot(shape_vars,shape_vars.T))
+    shapes_corr=np.nan_to_num(shapes_cov/np.sqrt(np.dot(shape_vars,shape_vars.T)))
     ax=plt.subplot(a,b,ii+1)
     im=plt.imshow(shapes_corr, interpolation='none',cmap=cmap)
     plt.colorbar(im)

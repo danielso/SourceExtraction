@@ -125,12 +125,13 @@ def GetData(data_name):
         temp=h5py.File(DataFolder + 'BaylorV1Axons/animal9962session3scan4slice1frames5000.mat')
         data=temp["X2"]
         data=np.asarray(data,dtype='float')  
+        data=data[:,:200,:200] #take only a small patch
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
     else:
         print 'unknown dataset name!'
     return data
     
-def GetCentersData(data,data_name,NumCent):
+def GetCentersData(data,data_name,NumCent,rep):
     
     from numpy import  array,percentile    
     from BlockGroupLasso import gaussian_group_lasso, GetCenters
@@ -140,7 +141,7 @@ def GetCentersData(data,data_name,NumCent):
         
     DataFolder=GetDataFolder()
     
-    center_file_name=DataFolder + '/centers_'+data_name 
+    center_file_name=DataFolder + '/centers_'+ data_name + '_rep_' + str(rep)
     if NumCent>0:
         if os.path.isfile(center_file_name)==False:
             if data.ndim==3:
@@ -225,6 +226,56 @@ def SuperVoxelize(data):
     return data
     
 #%% post processing
+
+from scipy.sparse.csgraph import connected_components
+from collections import defaultdict
+from scipy.ndimage.filters import gaussian_filter
+
+def MergeComponents(shapes,activity,L,threshold,sig):
+    if len(shapes)==0:
+       return shapes,activity,L
+    dims_shape=shapes[0].shape
+    D=len(dims_shape)
+    masks=0*shapes[:L]
+
+    for ll in range(L): 
+        temp=0*shapes[ll]
+        temp[shapes[ll]>0]=1
+        temp2=gaussian_filter(temp,[sig]*D)
+        masks[ll]=temp2>0.5/(np.sqrt(2*np.pi)*sig)**D
+
+    masks=masks.reshape(L,-1)
+    nearby_shapes=np.dot(masks,masks.T)>0
+
+    activity_cov=np.dot(activity[:L],activity[:L].T)
+    activity_vars=np.diag(activity_cov).reshape(-1,1)
+    activity_corr=activity_cov/np.sqrt(np.dot(activity_vars,activity_vars.T))
+
+    merge_ind=activity_corr>threshold
+    merge_ind[nearby_shapes==0]=0
+    num,labels=connected_components(merge_ind)
+    
+    #im2=plt.imshow(merge_ind, interpolation='none',cmap=cmap)
+    #plt.colorbar(im2)
+    
+    comp2merge = defaultdict(list)
+    for ii,item in enumerate(labels):
+        comp2merge[item].append(ii)
+    comp2merge = {k:v for k,v in comp2merge.items() if len(v)>1}
+
+    deleted_indices=[]
+    for item in comp2merge.itervalues():    
+        for kk in item[1:]:
+            deleted_indices.append(kk)        
+            shapes[item[0]]+=shapes[kk]
+            
+    deleted_indices.sort()
+    for ll in deleted_indices[::-1]:
+        activity=np.delete(activity,(ll),axis=0)
+        shapes=np.delete(shapes,(ll),axis=0)
+    
+    L=L-len(deleted_indices)
+    return shapes,activity,L
     
 def PruneComponents(shapes,activity,TargetAreaRatio,L,deleted_indices=[]):
     
@@ -234,7 +285,7 @@ def PruneComponents(shapes,activity,TargetAreaRatio,L,deleted_indices=[]):
         cond2=0
         for ll in range(L):
             cond1=np.mean(shapes[ll]>0)<TargetAreaRatio[0]
-#            cond2=np.mean(shapes[ll]>0)>TargetAreaRatio[1]
+            cond2=np.mean(shapes[ll]>0)>(TargetAreaRatio[1]*3)
             if cond1 or cond2:
                 deleted_indices.append(ll) 
             

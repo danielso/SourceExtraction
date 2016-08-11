@@ -30,7 +30,7 @@ def PlotAll(SaveNames,params):
     # PostProcessing   
     Split=False   
     Threshold=False #threshold shapes in the end and keep only connected components
-    Prune=False # Remove "Bad" components (where bad is defined within SplitComponent fucntion)
+    Prune=True # Remove "Bad" components (where bad is defined within SplitComponent fucntion)
     Merge=True # Merge highly correlated nearby components
     FineTune=True # SHould we fine tune activity after post-processing? (mainly after merging)
     IncludeBackground=False #should we include the background as an extracted component?
@@ -38,7 +38,7 @@ def PlotAll(SaveNames,params):
     # how to plot
     scale=2 #scale colormap to enhance colors
     satuartion_percentile=96 #saturate colormap ont this percentile, when ma=percentile is used
-    dpi=200 #for videos
+    dpi=100 #for videos
     restrict_support=True #in shape video, zero out data outside support of shapes
     C=4 #number of components to show in shape videos (if larger then number of shapes L, then we automatically set C=L)
     color_map='gnuplot'
@@ -74,7 +74,8 @@ def PlotAll(SaveNames,params):
 
     
     min_dim=np.argmin(dims[1:])
-    denoised_data=0    
+    denoised_data=0
+    residual=data
     detrended_data=data
     
     Results_folder='Results/'
@@ -88,8 +89,8 @@ def PlotAll(SaveNames,params):
                 print 'results file not found!!'              
             else:
                 break            
-        S=results['shapes']
-        A=results['activity']
+        shapes=results['shapes']
+        activity=results['activity']
 
         if rep>=params.Background_num:
             adaptBias=False
@@ -98,211 +99,133 @@ def PlotAll(SaveNames,params):
             
         if IncludeBackground==True:
             adaptBias=False        
+
+        L=len(activity)-adaptBias                 
         
-        detrended_data= detrended_data - adaptBias*((A[-1].reshape(-1, 1)).dot(S[-1].reshape(1, -1))).reshape(dims)
+        if Split==True:
+            shapes,activity,L,all_local_max=SplitComponents(shapes,activity,adaptBias)   
         
-        L=len(A)-adaptBias
+        if Merge==True:
+            shapes,activity,L=MergeComponents(shapes,activity,L,threshold=0.95,sig=10)
+            
+        if Prune==True:
+#           deleted_indices=[5,9,11,14,15,17,24]+range(25,36)
+            shapes,activity,L=PruneComponents(shapes,activity,params.TargetAreaRatio,L,[])
+        
+        if FineTune==True:
+            T=np.shape(data)[0]
+            activity=HALS4activity(data.reshape((T,-1)), shapes.reshape((len(shapes),-1)), activity,params.NonNegative,lam1_t=0,lam2_t=0,iters=30)
+        
+        
+        orig_shapes=np.copy(shapes) #shapes before thresholding
+        if Threshold==True:            
+            shapes=ThresholdShapes(shapes,adaptBias,[],MaxRatio=0.3)
+        
         if L==0: #Stop if we encounter a file with zero components
             break
-        S=S[:-adaptBias]
-        A=A[:-adaptBias]
-        if rep==0:
-            shapes=S
-            activity=A
-        else:
-            shapes=np.append(shapes,S,axis=0)
-            activity=np.append(activity,A,axis=0) 
-        
-    L=len(shapes)
-    adaptBias=0
-    
-    if Split==True:
-        shapes,activity,L,all_local_max=SplitComponents(shapes,activity,adaptBias)   
-    
-    if Merge==True:
-        shapes,activity,L=MergeComponents(shapes,activity,L,threshold=0.95,sig=10)
-        
-    if Prune==True:
-#           deleted_indices=[5,9,11,14,15,17,24]+range(25,36)
-        shapes,activity,L=PruneComponents(shapes,activity,params.TargetAreaRatio,L,[])
-    
-    if FineTune==True:
-        T=np.shape(data)[0]
-        activity=HALS4activity(data.reshape((T,-1)), shapes.reshape((len(shapes),-1)), activity,params.NonNegative,lam1_t=0,lam2_t=0,iters=30)
-
-    orig_shapes=np.copy(shapes) #shapes before thresholding
-    if Threshold==True:            
-        shapes=ThresholdShapes(shapes,adaptBias,[],MaxRatio=0.3)
-    
-
                 
-    if plot_residual_projections or video_shapes or video_residual or video_slices or video_residual_2D:
-        activity_NonNegative=np.copy(activity)
-        activity_NonNegative[activity_NonNegative<0]=0
-        colors=GetRandColors(L)
-        color_shapes=np.transpose(shapes.reshape(L, -1,1)*colors,[1,0,2]) #weird transpose for tensor dot product next line
-        denoised_data = denoised_data + (activity_NonNegative.T.dot(color_shapes)).reshape(tuple(dims)+(3,))        
-        residual = detrended_data - activity_NonNegative.T.dot(orig_shapes.reshape(L, -1)).reshape(dims)              
+        if plot_residual_projections or video_shapes or video_residual or video_slices or video_residual_2D:
+            activity_NonNegative=np.copy(activity)
+            activity_NonNegative[activity_NonNegative<0]=0
+            colors=GetRandColors(L)
+            color_shapes=np.transpose(shapes[:L].reshape(L, -1,1)*colors,[1,0,2]) #weird transpose for tensor dot product next line
+            denoised_data = denoised_data + (activity_NonNegative[:L].T.dot(color_shapes)).reshape(tuple(dims)+(3,))        
+            residual = residual - activity_NonNegative.T.dot(orig_shapes.reshape(L+adaptBias, -1)).reshape(dims)        
+            detrended_data= detrended_data - adaptBias*((activity_NonNegative[-1].reshape(-1, 1)).dot(shapes[-1].reshape(1, -1))).reshape(dims)
 
- 
-#%% After loading loop - Normalize (colored) denoised data
-    if plot_residual_projections or video_shapes or video_residual or video_slices or video_residual_2D:
-    #   denoised_data=denoised_data/np.max(denoised_data)
-        denoised_data=denoised_data/np.percentile(denoised_data,99.5)  #%% normalize denoised data range
-        denoised_data[denoised_data>1]=1           
-    
+            
     #    plt.close('all')
         
-    #%% plotting params
-    ComponentsInFig=20
+        #%% plotting params
+        ComponentsInFig=20
 
-    left  = 0.05 # the left side of the subplots of the figure
-    right = 0.95   # the right side of the subplots of the figure
-    bottom = 0.05   # the bottom of the subplots of the figure
-    top = 0.95      # the top of the subplots of the figure
-    wspace = 0.1   # the amount of width reserved for blank space between subplots
-    hspace = 0.12  # the amount of height reserved for white space between subplots        
-    
+        left  = 0.05 # the left side of the subplots of the figure
+        right = 0.95   # the right side of the subplots of the figure
+        bottom = 0.05   # the bottom of the subplots of the figure
+        top = 0.95      # the top of the subplots of the figure
+        wspace = 0.1   # the amount of width reserved for blank space between subplots
+        hspace = 0.12  # the amount of height reserved for white space between subplots        
               
-    #%% ###### Plot Individual neurons' activities
-    index=0 #component display index
-    sz=np.min([ComponentsInFig,L+adaptBias])
-    a=ceil(sqrt(sz))  
-    b=ceil(sz/a)  
-    
-    if plot_activities:
-        pp = PdfPages(Results_folder + 'Activities'+resultsName+'.pdf')
-        for ii in range(L+adaptBias):
-            if index==0:
-                fig0=plt.figure(figsize=(dims[1] , dims[2]))
-#                    fig0=plt.figure(figsize=(11,18))
-            ax = plt.subplot(a,b,index+1)
-            pl=plt.plot(activity[ii])
-            plt.setp(ax, xticks=[],yticks=[0])
-            plt.setp(pl,'linewidth','2.0')
-            # component number
-            ax.text(0.02, 0.8, str(ii),
-                verticalalignment='bottom', horizontalalignment='left',
-                transform=ax.transAxes,
-                color='black',weight='bold', fontsize=13)
-            index+=1   
-            if (ii%ComponentsInFig==(ComponentsInFig-1)) or ii==L+adaptBias-1: 
-                plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
-                index=0
-                if save_plot==True:
-                    pp.savefig(fig0)    
-        pp.close()
-        if close_figs:
-            plt.close('all')
+        #%% ###### Plot Individual neurons' activities
+        index=0 #component display index
+        sz=np.min([ComponentsInFig,L+adaptBias])
+        a=ceil(sqrt(sz))  
+        b=ceil(sz/a)  
         
-    #%%  2D shapes
-    index=0 #component display index
-    sz=np.min([ComponentsInFig,L+adaptBias])
-    a=ceil(0.5*sqrt(sz))  
-    b=ceil(sz/a)  
-    
-    if plot_Shapes2D:            
-        if save_plot==True:
-            pp = PdfPages(Results_folder + 'Shapes2D_'+resultsName+'.pdf')
-        for ll in range(L+adaptBias):
-            if index==0:
-                fig=plt.figure(figsize=(18 , 11))
-            ax = plt.subplot(a,b,index+1)  
-            temp=shapes[ll]
-            mi=0
-            try:
-                ma=np.percentile(temp[temp>0],satuartion_percentile)
-            except IndexError:
-                ma=0
-            im=plt.imshow(temp,vmin=mi,vmax=ma,cmap=color_map)
-            plt.setp(ax,xticks=[],yticks=[])
-            mn=int(np.floor(mi))        # colorbar min value
-            mx=int(np.ceil(ma))         # colorbar max value
-            md=(mx-mn)/2
-#                divider = make_axes_locatable(ax)
-#                cax = divider.append_axes("right", size="5%", pad=0.05)
-#                cb=plt.colorbar(im,cax=cax)
-#                    cb.set_ticks([mn,md,mx])
-#                    cb.set_ticklabels([mn,md,mx])
-            
-            # component number
-            ax.text(0.02, 0.8, str(ll),
-            verticalalignment='bottom', horizontalalignment='left',
-            transform=ax.transAxes,
-            color='white',weight='bold', fontsize=13)
-            #sparsity
-            spar_str=str(np.round(np.mean(shapes[ll]>0)*100,2))+'%'
-            ax.text(0.02, 0.02, spar_str,
-            verticalalignment='bottom', horizontalalignment='left',
-            transform=ax.transAxes,
-            color='white',weight='bold', fontsize=13)
-            #L^p
-            for p in range(2,2,6):
-                Lp=(np.sum(shapes[ll]**p))**(1/float(p))/np.sum(shapes[ll])
-                Lp_str=str(np.round(Lp*100,2))+'%' #'L'+str(p)+'='+
-                ax.text(0.02+p*0.2, 0.02, Lp_str,
-                verticalalignment='bottom', horizontalalignment='left',
-                transform=ax.transAxes,
-                color='yellow',weight='bold', fontsize=13)         
-            index+=1
-            if (ll%ComponentsInFig==(ComponentsInFig-1)) or ll==L+adaptBias-1: 
-                plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
-                index=0
-                if save_plot==True:
-                    pp.savefig(fig)            
-        pp.close()
-        if close_figs:
-            plt.close('all')
-            
-    #%% Re-write plot code from here, so that each figure has only ComponentsInFig components         
-    #%% ###### Plot Individual neurons' area which is correlated with their activities
-    a=ceil(sqrt(L+adaptBias))
-    b=ceil((L+adaptBias)/a)
-    
-    if plot_activityCorrs:
-        if save_plot==True:
-            pp = PdfPages(Results_folder + 'CorrelationWithActivity'+resultsName+'.pdf')
-        for dd in range(len(shapes[0].shape)):
-            fig0=plt.figure(figsize=(11,18))
-    
+        if plot_activities:
+            pp = PdfPages(Results_folder + 'Activities'+resultsName+'.pdf')
             for ii in range(L+adaptBias):
-                ax = plt.subplot(a,b,ii+1)
-                corr_imag=np.dot(activity[ii],np.transpose(data,[1,2,0,3]))/np.sqrt(np.sum(data**2,axis=0)*np.sum(activity[ii]**2))
-                plt.imshow(np.abs(corr_imag).max(dd),cmap=color_map)
-                plt.setp(ax,xticks=[],yticks=[])
-            plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+                if index==0:
+                    fig0=plt.figure(figsize=(dims[1] , dims[2]))
+#                    fig0=plt.figure(figsize=(11,18))
+                ax = plt.subplot(a,b,index+1)
+                plt.plot(activity[ii])
+                plt.setp(ax,xticks=[],yticks=[0])
+                # component number
+                ax.text(0.02, 0.8, str(ii),
+                    verticalalignment='bottom', horizontalalignment='left',
+                    transform=ax.transAxes,
+                    color='black',weight='bold', fontsize=13)
+                index+=1   
+                if (ii%ComponentsInFig==(ComponentsInFig-1)) or ii==L+adaptBias-1: 
+                    plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+                    index=0
+                    if save_plot==True:
+                        pp.savefig(fig0)    
+            pp.close()
+            if close_figs:
+                plt.close('all')
+            
+        #%% ###### Plot Individual neurons' area which is correlated with their activities
+        a=ceil(sqrt(L+adaptBias))
+        b=ceil((L+adaptBias)/a)
         
+        if plot_activityCorrs:
             if save_plot==True:
-                pp.savefig(fig0)
-        pp.close()
-        if close_figs:
-            plt.close('all')
-
-    #%%  All Shapes projections
-    a=ceil(sqrt(L+adaptBias))
-    b=ceil((L+adaptBias)/a)
-
-    if plot_shapes_projections:
-        if save_plot==True:
-            pp = PdfPages(Results_folder + 'Shapes_projections'+resultsName+'.pdf')
-
-        for dd in range(len(shapes[0].shape)):
-            fig=plt.figure(figsize=(18 , 11))
+                pp = PdfPages(Results_folder + 'CorrelationWithActivity'+resultsName+'.pdf')
+            for dd in range(len(shapes[0].shape)):
+                fig0=plt.figure(figsize=(11,18))
+        
+                for ii in range(L+adaptBias):
+                    ax = plt.subplot(a,b,ii+1)
+                    corr_imag=np.dot(activity[ii],np.transpose(data,[1,2,0,3]))/np.sqrt(np.sum(data**2,axis=0)*np.sum(activity[ii]**2))
+                    plt.imshow(np.abs(corr_imag).max(dd),cmap=color_map)
+                    plt.setp(ax,xticks=[],yticks=[])
+                plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+            
+                if save_plot==True:
+                    pp.savefig(fig0)
+            pp.close()
+            if close_figs:
+                plt.close('all')
+                
+        #%%  2D shapes
+        index=0 #component display index
+        sz=np.min([ComponentsInFig,L+adaptBias])
+        a=ceil(0.5*sqrt(sz))  
+        b=ceil(sz/a)  
+        
+        if plot_Shapes2D:            
+            if save_plot==True:
+                pp = PdfPages(Results_folder + 'Shapes2D_'+resultsName+'.pdf')
             for ll in range(L+adaptBias):
-                ax = plt.subplot(a,b,ll+1)  
-                temp=shapes[ll].max(dd)
-                if dd==2:
-                    temp=temp.T
-                mi=np.min(shapes[ll])
-                ma=np.max(shapes[ll])
+                if index==0:
+                    fig=plt.figure(figsize=(18 , 11))
+                ax = plt.subplot(a,b,index+1)  
+                temp=shapes[ll]
+                mi=0
+                try:
+                    ma=np.percentile(temp[temp>0],satuartion_percentile)
+                except IndexError:
+                    ma=0
                 im=plt.imshow(temp,vmin=mi,vmax=ma,cmap=color_map)
                 plt.setp(ax,xticks=[],yticks=[])
                 mn=int(np.floor(mi))        # colorbar min value
                 mx=int(np.ceil(ma))         # colorbar max value
                 md=(mx-mn)/2
-                divider = make_axes_locatable(ax)
-                cax = divider.append_axes("right", size="5%", pad=0.05)
-                cb=plt.colorbar(im,cax=cax)
+#                divider = make_axes_locatable(ax)
+#                cax = divider.append_axes("right", size="5%", pad=0.05)
+#                cb=plt.colorbar(im,cax=cax)
 #                    cb.set_ticks([mn,md,mx])
 #                    cb.set_ticklabels([mn,md,mx])
                 
@@ -311,7 +234,7 @@ def PlotAll(SaveNames,params):
                 verticalalignment='bottom', horizontalalignment='left',
                 transform=ax.transAxes,
                 color='white',weight='bold', fontsize=13)
-#                    #sparsity
+                #sparsity
                 spar_str=str(np.round(np.mean(shapes[ll]>0)*100,2))+'%'
                 ax.text(0.02, 0.02, spar_str,
                 verticalalignment='bottom', horizontalalignment='left',
@@ -324,223 +247,285 @@ def PlotAll(SaveNames,params):
 #                        ax.text(0.02+p*0.2, 0.02, Lp_str,
 #                        verticalalignment='bottom', horizontalalignment='left',
 #                        transform=ax.transAxes,
-#                        color='yellow',weight='bold', fontsize=13)
-            plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+#                        color='yellow',weight='bold', fontsize=13)         
+                index+=1
+                if (ll%ComponentsInFig==(ComponentsInFig-1)) or ll==L+adaptBias-1: 
+                    plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+                    index=0
+                    if save_plot==True:
+                        pp.savefig(fig)            
+            pp.close()
+            if close_figs:
+                plt.close('all')
+
+        #%%  All Shapes projections
+        a=ceil(sqrt(L+adaptBias))
+        b=ceil((L+adaptBias)/a)
+
+        if plot_shapes_projections:
             if save_plot==True:
-                pp.savefig(fig)            
-        pp.close()
-        if close_figs:
-            plt.close('all')
-    #for ll in range(L+adaptBias):
-    #    print 'Sparsity=',np.mean(shapes[ll]>0)
-            
-   
-   
-   #%%  All Shapes slices        
-    transpose_shape= True # should we transpose shape
-    ComponentsInFig=3 # number of components in Figure
-    index=0 #component display index
-#        z_slices=[0,1,2,3,4,5,6,7,8] #which z slices to look at slice plots/videos
-    z_slices=range(dims[min_dim+1]) #which z slices to look at slice plots/videos
-    
-    if plot_shapes_slices:            
-        if save_plot==True:
-            pp = PdfPages(Results_folder + 'Shapes_slices'+resultsName+'.pdf')
-        for ll in range(L+adaptBias):
-            if index==0:
-                fig=plt.figure(figsize=(18, 11))
-            for dd in range(len(z_slices)):                
-                ax = plt.subplot(ComponentsInFig,len(z_slices),index*len(z_slices)+dd+1) 
-                temp=shapes[ll].take(dd,axis=min_dim)
-                if transpose_shape:
-                    temp=np.transpose(temp)                                           
+                pp = PdfPages(Results_folder + 'Shapes_projections'+resultsName+'.pdf')
+
+            for dd in range(len(shapes[0].shape)):
+                fig=plt.figure(figsize=(18 , 11))
+                for ll in range(L+adaptBias):
+                    ax = plt.subplot(a,b,ll+1)  
+                    temp=shapes[ll].max(dd)
+                    if dd==2:
+                        temp=temp.T
+                    mi=np.min(shapes[ll])
+                    ma=np.max(shapes[ll])
+                    im=plt.imshow(temp,vmin=mi,vmax=ma,cmap=color_map)
+                    plt.setp(ax,xticks=[],yticks=[])
+                    mn=int(np.floor(mi))        # colorbar min value
+                    mx=int(np.ceil(ma))         # colorbar max value
+                    md=(mx-mn)/2
+                    divider = make_axes_locatable(ax)
+                    cax = divider.append_axes("right", size="5%", pad=0.05)
+                    cb=plt.colorbar(im,cax=cax)
+#                    cb.set_ticks([mn,md,mx])
+#                    cb.set_ticklabels([mn,md,mx])
                     
-                mi=np.min(shapes[ll])
-                ma=np.max(shapes[ll])
-                im=plt.imshow(temp,vmin=mi,vmax=ma,cmap=color_map)
-                plt.setp(ax,xticks=[],yticks=[])
-                
-                if dd==0:
                     # component number
                     ax.text(0.02, 0.8, str(ll),
                     verticalalignment='bottom', horizontalalignment='left',
                     transform=ax.transAxes,
                     color='white',weight='bold', fontsize=13)
-                    #sparsity
+#                    #sparsity
                     spar_str=str(np.round(np.mean(shapes[ll]>0)*100,2))+'%'
                     ax.text(0.02, 0.02, spar_str,
                     verticalalignment='bottom', horizontalalignment='left',
                     transform=ax.transAxes,
                     color='white',weight='bold', fontsize=13)
-                    mn=int(np.floor(mi))        # colorbar min value
-                    mx=int(np.ceil(ma))         # colorbar max value
-                    md=(mx-mn)/2
-                    divider = make_axes_locatable(ax)
-                    cax = divider.append_axes("bottom", size="5%", pad=0.05)
-                    cb=plt.colorbar(im,cax=cax,orientation="horizontal")
-                    cb.set_ticks([mn,md,mx])
-                    cb.set_ticklabels([mn,md,mx])
-                    #L^p
-                    for p in range(2,2,2):
-                        Lp=(np.sum(shapes[ll]**p))**(1/float(p))/np.sum(shapes[ll])
-                        Lp_str=str(np.round(Lp*100,2))+'%' #'L'+str(p)+'='+
-                        ax.text(0.02+p*0.15, 0.02, Lp_str,
+#                    #L^p
+#                    for p in range(2,2,2):
+#                        Lp=(np.sum(shapes[ll]**p))**(1/float(p))/np.sum(shapes[ll])
+#                        Lp_str=str(np.round(Lp*100,2))+'%' #'L'+str(p)+'='+
+#                        ax.text(0.02+p*0.2, 0.02, Lp_str,
+#                        verticalalignment='bottom', horizontalalignment='left',
+#                        transform=ax.transAxes,
+#                        color='yellow',weight='bold', fontsize=13)
+                plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+                if save_plot==True:
+                    pp.savefig(fig)            
+            pp.close()
+            if close_figs:
+                plt.close('all')
+        #for ll in range(L+adaptBias):
+        #    print 'Sparsity=',np.mean(shapes[ll]>0)
+                
+       
+       
+       #%%  All Shapes slices        
+        transpose_shape= True # should we transpose shape
+        ComponentsInFig=3 # number of components in Figure
+        index=0 #component display index
+#        z_slices=[0,1,2,3,4,5,6,7,8] #which z slices to look at slice plots/videos
+        z_slices=range(dims[min_dim+1]) #which z slices to look at slice plots/videos
+        
+        if plot_shapes_slices:            
+            if save_plot==True:
+                pp = PdfPages(Results_folder + 'Shapes_slices'+resultsName+'.pdf')
+            for ll in range(L+adaptBias):
+                if index==0:
+                    fig=plt.figure(figsize=(18, 11))
+                for dd in range(len(z_slices)):                
+                    ax = plt.subplot(ComponentsInFig,len(z_slices),index*len(z_slices)+dd+1) 
+                    temp=shapes[ll].take(dd,axis=min_dim)
+                    if transpose_shape:
+                        temp=np.transpose(temp)                                           
+                        
+                    mi=np.min(shapes[ll])
+                    ma=np.max(shapes[ll])
+                    im=plt.imshow(temp,vmin=mi,vmax=ma,cmap=color_map)
+                    plt.setp(ax,xticks=[],yticks=[])
+                    
+                    if dd==0:
+                        # component number
+                        ax.text(0.02, 0.8, str(ll),
                         verticalalignment='bottom', horizontalalignment='left',
                         transform=ax.transAxes,
-                        color='yellow',weight='bold', fontsize=13)
+                        color='white',weight='bold', fontsize=13)
+                        #sparsity
+                        spar_str=str(np.round(np.mean(shapes[ll]>0)*100,2))+'%'
+                        ax.text(0.02, 0.02, spar_str,
+                        verticalalignment='bottom', horizontalalignment='left',
+                        transform=ax.transAxes,
+                        color='white',weight='bold', fontsize=13)
+                        mn=int(np.floor(mi))        # colorbar min value
+                        mx=int(np.ceil(ma))         # colorbar max value
+                        md=(mx-mn)/2
+                        divider = make_axes_locatable(ax)
+                        cax = divider.append_axes("bottom", size="5%", pad=0.05)
+                        cb=plt.colorbar(im,cax=cax,orientation="horizontal")
+                        cb.set_ticks([mn,md,mx])
+                        cb.set_ticklabels([mn,md,mx])
+                        #L^p
+                        for p in range(2,2,2):
+                            Lp=(np.sum(shapes[ll]**p))**(1/float(p))/np.sum(shapes[ll])
+                            Lp_str=str(np.round(Lp*100,2))+'%' #'L'+str(p)+'='+
+                            ax.text(0.02+p*0.15, 0.02, Lp_str,
+                            verticalalignment='bottom', horizontalalignment='left',
+                            transform=ax.transAxes,
+                            color='yellow',weight='bold', fontsize=13)
+                            
                         
-                    
-            plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
-            index+=1
-            if (ll%ComponentsInFig==(ComponentsInFig-1)) or ll==L+adaptBias-1:                    
-                if save_plot==True:
-                    pp.savefig(fig)    
-                index=0
-        pp.close()
-        if close_figs:
-            plt.close('all')
-    #for ll in range(L+adaptBias):
-    #    print 'Sparsity=',np.mean(shapes[ll]>0)
-            
-    #%% ###### Plot Individual neurons' shape projection with clustering
-    a=ceil(sqrt(L+adaptBias))
-    b=ceil((L+adaptBias)/a)
-    
-    if plot_clustered_shape:
-        from sklearn.cluster import spectral_clustering
-        pp = PdfPages(Results_folder + 'ClusteredShapes'+resultsName+'.pdf')
-        figs=[]
-        for dd in range(len(shapes[0].shape)):
-            figs.append(plt.figure(figsize=(18 , 11)))
-        for ll in range(L):              
-            ind=np.reshape(shapes[ll],(1,)+tuple(dims[1:]))>0
-            temp=data[np.repeat(ind,dims[0],axis=0)].reshape(dims[0],-1)
-            delta=1 #affinity trasnformation parameter
-            clust=3 #number of cluster
-            similarity=np.exp(-np.corrcoef(temp.T)/delta)                    
-            labels = spectral_clustering(similarity, n_clusters=clust, eigen_solver='arpack')
-            ind2=np.array(np.nonzero(ind.reshape(-1))).reshape(-1)
-            temp_shape=np.repeat(np.zeros_like(shapes[ll]).reshape(-1,1),clust,axis=1)
-            for cc in range(clust):
-                temp_shape[ind2[labels==cc],cc]=1
-            temp_shape=temp_shape.reshape(tuple(dims[1:])+(clust,))
-
-            for dd in range(len(shapes[0].shape)):
-                current_fig=figs[dd]
-                ax = current_fig.add_subplot(a,b,ll+1)
-                if dd==2:
-                    temp_shape=np.transpose(temp_shape,axes=[1,0,2,3])
-                ax.imshow(temp_shape.max(dd))
-
-                plt.setp(ax,xticks=[],yticks=[])
                 plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+                index+=1
+                if (ll%ComponentsInFig==(ComponentsInFig-1)) or ll==L+adaptBias-1:                    
+                    if save_plot==True:
+                        pp.savefig(fig)    
+                    index=0
+            pp.close()
+            if close_figs:
+                plt.close('all')
+        #for ll in range(L+adaptBias):
+        #    print 'Sparsity=',np.mean(shapes[ll]>0)
+                
+        #%% ###### Plot Individual neurons' shape projection with clustering
+        a=ceil(sqrt(L+adaptBias))
+        b=ceil((L+adaptBias)/a)
         
-        if save_plot==True:
+        if plot_clustered_shape:
+            from sklearn.cluster import spectral_clustering
+            pp = PdfPages(Results_folder + 'ClusteredShapes'+resultsName+'.pdf')
+            figs=[]
             for dd in range(len(shapes[0].shape)):
-                current_fig=figs[dd]
-                pp.savefig(current_fig)
-        pp.close()
-        if close_figs:
-            plt.close('all')
-            
-            
+                figs.append(plt.figure(figsize=(18 , 11)))
+            for ll in range(L):              
+                ind=np.reshape(shapes[ll],(1,)+tuple(dims[1:]))>0
+                temp=data[np.repeat(ind,dims[0],axis=0)].reshape(dims[0],-1)
+                delta=1 #affinity trasnformation parameter
+                clust=3 #number of cluster
+                similarity=np.exp(-np.corrcoef(temp.T)/delta)                    
+                labels = spectral_clustering(similarity, n_clusters=clust, eigen_solver='arpack')
+                ind2=np.array(np.nonzero(ind.reshape(-1))).reshape(-1)
+                temp_shape=np.repeat(np.zeros_like(shapes[ll]).reshape(-1,1),clust,axis=1)
+                for cc in range(clust):
+                    temp_shape[ind2[labels==cc],cc]=1
+                temp_shape=temp_shape.reshape(tuple(dims[1:])+(clust,))
 
-    #%% #####  Video Shapes
-    if video_shapes:
-        components=range(min(asarray([C,L])))
-        C=len(components)
-        if restrict_support==True:
-            shape_support=shapes[components[0]]>0            
-            for cc in range(C):
-                shape_support=np.logical_or(shape_support,shapes[components[cc]]>0)
-            detrended_data=shape_support.reshape((1,)+tuple(dims[1:]))*detrended_data
-        
-        fig = plt.figure(figsize=(16,7))
-        mi = 0
-        ma = max(data)*scale
-        #mi2 = 0
-        #ma2 = max(shapes[ll])*max(activity[ll])
-        
-        ii=0
-        #import colormaps as cmaps
-        #cmap=cmaps.viridis
-        cmap=color_map
-        a=3
-        b=1+C
-        
-        ax1 = plt.subplot(a,b,1)
-        im1 = ax1.imshow(data[ii].max(0), vmin=mi, vmax=ma,cmap=cmap)
-        title=ax1.set_title('Data')
-        #plt.colorbar(im1)
-        ax2=[] 
-        ax4=[] 
-        ax6=[]
-        im2=[]
-        im4=[]
-        im6=[]
-        
-        for cc in range(C):
-            ax2.append(plt.subplot(a,b,2+cc))
-            comp=shapes[components[cc]].max(0)*activity_NonNegative[components[cc],ii]
-            ma2=max(shapes[components[cc]].max(0))*max(activity_NonNegative[components[cc]])*scale
-            im2.append(ax2[cc].imshow(comp,vmin=0,vmax=ma2,cmap=cmap))
-        #ax2[0].set_title('Shape')
-        #    plt.colorbar(im2)
-        
-        ax3 = plt.subplot(a,b,1+b)
-        im3 = ax3.imshow(data[ii].max(1), vmin=mi, vmax=ma,cmap=cmap)
-        
-        #plt.colorbar(im3)
-        
-        for cc in range(C):
-            ax4.append(plt.subplot(a,b,2+b+cc))
-            comp=shapes[components[cc]].max(1)*activity_NonNegative[components[cc],ii]
-            ma2=max(shapes[components[cc]].max(1))*max(activity_NonNegative[components[cc]])*scale
-            im4.append(ax4[cc].imshow(comp,vmin=0,vmax=ma2,cmap=cmap))
-        
-        #plt.colorbar(im4)
-        
-        ax5 = plt.subplot(a,b,1+2*b)
-        im5 = ax5.imshow(np.transpose(detrended_data[ii].max(2)), vmin=mi, vmax=ma,cmap=cmap)
-        
-        #plt.colorbar(im5)
-        for cc in range(C):
-            ax6.append(plt.subplot(a,b,2+2*b+cc))
-            comp=np.transpose(shapes[components[cc]].max(2))*activity_NonNegative[components[cc],ii]
-            ma2=max(shapes[components[cc]].max(2))*max(activity_NonNegative[components[cc]])*scale
-            im6.append(ax6[cc].imshow(comp,vmin=0,vmax=ma2,cmap=cmap))
-        
-        #plt.colorbar(im6)
-        
-        fig.tight_layout()
-        ComponentsActive=np.array([])
-        for cc in range(C):
-            ComponentsActive=np.append(ComponentsActive,np.nonzero(activity_NonNegative[components[cc]]))
-        ComponentsActive=np.unique(ComponentsActive)
-        
-        def update(tt):
-            ii=ComponentsActive[tt]
-            im1.set_data(data[ii].max(0))        
-            im3.set_data(data[ii].max(1))        
-            im5.set_data(np.transpose(data[ii].max(2)))
-        
-            for cc in range(C): 
-                im2[cc].set_data(shapes[components[cc]].max(0)*activity_NonNegative[components[cc],ii])
-                im4[cc].set_data(shapes[components[cc]].max(1)*activity_NonNegative[components[cc],ii])
-                im6[cc].set_data(np.transpose(shapes[components[cc]].max(2))*activity_NonNegative[components[cc],ii])
-            title.set_text('Data, time = %.1f' % ii)
-        
-        if save_video==True:
-            writer = animation.writers['ffmpeg'](fps=10)
-            ani = animation.FuncAnimation(fig, update, frames=len(ComponentsActive), blit=True, repeat=False)
+                for dd in range(len(shapes[0].shape)):
+                    current_fig=figs[dd]
+                    ax = current_fig.add_subplot(a,b,ll+1)
+                    if dd==2:
+                        temp_shape=np.transpose(temp_shape,axes=[1,0,2,3])
+                    ax.imshow(temp_shape.max(dd))
+
+                    plt.setp(ax,xticks=[],yticks=[])
+                    plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+            
+            if save_plot==True:
+                for dd in range(len(shapes[0].shape)):
+                    current_fig=figs[dd]
+                    pp.savefig(current_fig)
+            pp.close()
+            if close_figs:
+                plt.close('all')
+                
+                
+
+        #%% #####  Video Shapes
+        if video_shapes:
+            components=range(min(asarray([C,L])))
+            C=len(components)
             if restrict_support==True:
-                ani.save(Results_folder + 'Shapes_Restricted'+resultsName+'.mp4',dpi=dpi,writer=writer)
-            else:                        
-                ani.save(Results_folder + 'Shapes_'+resultsName+'.mp4',dpi=dpi,writer=writer)
-        else:
-            ani = animation.FuncAnimation(fig, update, frames=len(ComponentsActive), blit=True, repeat=False)
-            plt.show()
+                shape_support=shapes[components[0]]>0            
+                for cc in range(C):
+                    shape_support=np.logical_or(shape_support,shapes[components[cc]]>0)
+                detrended_data=shape_support.reshape((1,)+tuple(dims[1:]))*detrended_data
+            
+            fig = plt.figure(figsize=(16,7))
+            mi = 0
+            ma = max(data)*scale
+            #mi2 = 0
+            #ma2 = max(shapes[ll])*max(activity[ll])
+            
+            ii=0
+            #import colormaps as cmaps
+            #cmap=cmaps.viridis
+            cmap=color_map
+            a=3
+            b=1+C
+            
+            ax1 = plt.subplot(a,b,1)
+            im1 = ax1.imshow(data[ii].max(0), vmin=mi, vmax=ma,cmap=cmap)
+            title=ax1.set_title('Data')
+            #plt.colorbar(im1)
+            ax2=[] 
+            ax4=[] 
+            ax6=[]
+            im2=[]
+            im4=[]
+            im6=[]
+            
+            for cc in range(C):
+                ax2.append(plt.subplot(a,b,2+cc))
+                comp=shapes[components[cc]].max(0)*activity_NonNegative[components[cc],ii]
+                ma2=max(shapes[components[cc]].max(0))*max(activity_NonNegative[components[cc]])*scale
+                im2.append(ax2[cc].imshow(comp,vmin=0,vmax=ma2,cmap=cmap))
+            #ax2[0].set_title('Shape')
+            #    plt.colorbar(im2)
+            
+            ax3 = plt.subplot(a,b,1+b)
+            im3 = ax3.imshow(data[ii].max(1), vmin=mi, vmax=ma,cmap=cmap)
+            
+            #plt.colorbar(im3)
+            
+            for cc in range(C):
+                ax4.append(plt.subplot(a,b,2+b+cc))
+                comp=shapes[components[cc]].max(1)*activity_NonNegative[components[cc],ii]
+                ma2=max(shapes[components[cc]].max(1))*max(activity_NonNegative[components[cc]])*scale
+                im4.append(ax4[cc].imshow(comp,vmin=0,vmax=ma2,cmap=cmap))
+            
+            #plt.colorbar(im4)
+            
+            ax5 = plt.subplot(a,b,1+2*b)
+            im5 = ax5.imshow(np.transpose(detrended_data[ii].max(2)), vmin=mi, vmax=ma,cmap=cmap)
+            
+            #plt.colorbar(im5)
+            for cc in range(C):
+                ax6.append(plt.subplot(a,b,2+2*b+cc))
+                comp=np.transpose(shapes[components[cc]].max(2))*activity_NonNegative[components[cc],ii]
+                ma2=max(shapes[components[cc]].max(2))*max(activity_NonNegative[components[cc]])*scale
+                im6.append(ax6[cc].imshow(comp,vmin=0,vmax=ma2,cmap=cmap))
+            
+            #plt.colorbar(im6)
+            
+            fig.tight_layout()
+            ComponentsActive=np.array([])
+            for cc in range(C):
+                ComponentsActive=np.append(ComponentsActive,np.nonzero(activity_NonNegative[components[cc]]))
+            ComponentsActive=np.unique(ComponentsActive)
+            
+            def update(tt):
+                ii=ComponentsActive[tt]
+                im1.set_data(data[ii].max(0))        
+                im3.set_data(data[ii].max(1))        
+                im5.set_data(np.transpose(data[ii].max(2)))
+            
+                for cc in range(C): 
+                    im2[cc].set_data(shapes[components[cc]].max(0)*activity_NonNegative[components[cc],ii])
+                    im4[cc].set_data(shapes[components[cc]].max(1)*activity_NonNegative[components[cc],ii])
+                    im6[cc].set_data(np.transpose(shapes[components[cc]].max(2))*activity_NonNegative[components[cc],ii])
+                title.set_text('Data, time = %.1f' % ii)
+            
+            if save_video==True:
+                writer = animation.writers['ffmpeg'](fps=10)
+                ani = animation.FuncAnimation(fig, update, frames=len(ComponentsActive), blit=True, repeat=False)
+                if restrict_support==True:
+                    ani.save(Results_folder + 'Shapes_Restricted'+resultsName+'.mp4',dpi=dpi,writer=writer)
+                else:                        
+                    ani.save(Results_folder + 'Shapes_'+resultsName+'.mp4',dpi=dpi,writer=writer)
+            else:
+                ani = animation.FuncAnimation(fig, update, frames=len(ComponentsActive), blit=True, repeat=False)
+                plt.show()
 
+#%% After loading loop - Normalize (colored) denoised data
+    if plot_residual_projections or video_shapes or video_residual or video_slices or video_residual_2D:
+    #   denoised_data=denoised_data/np.max(denoised_data)
+        denoised_data=denoised_data/np.percentile(denoised_data,99.5)  #%% normalize denoised data range
+        denoised_data[denoised_data>1]=1
     
     #%% ##### Plot denoised projection - Results
 

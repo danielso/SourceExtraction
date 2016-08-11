@@ -6,14 +6,14 @@ def GetDefaultParams():
     # choose dataset name (function GetData will use this to fetch the correct dataset)
     data_name_set=['Hillman','HillmanSmall','Sophie2D','Sophie3D','SophieVoltage3D','Sophie3DSmall',
     'SaraSmall','Sara19DEC2015_w1t1','PhilConfocal','PhilMFM','PhilConfocal2','BaylorAxonsSmall','BaylorAxons']
-    data_name=data_name_set[2]
+    data_name=data_name_set[-2]
     
     # "default" parameters - for additional information see "LocalNMF" in BlockLocalNMF
     
     NumCent=0 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
     mbs=[1] # temporal downsampling of data in intial phase of NMF
     ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
-    TargetAreaRatio=[0.005,0.05] # target sparsity range for spatial components
+    TargetAreaRatio=[0.005,0.05] # target sparsity range for spatial components - low
     repeats=1 # how many repeations to run NMF algorithm
     iters0=[10] # number of intial NMF iterations, in which we downsample data and add components
     iters=50 # number of main NMF iterations, in which we fine tune the components on the full data
@@ -147,48 +147,48 @@ def GetDefaultParams():
         FinalNonNegative=False
         sig=(500,500,3)
     elif data_name=='BaylorAxonsSmall':
-        NumCent=0 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+        NumCent=300 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
         mbs=[1] # temporal downsampling of data in intial phase of NMF
         ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
-        TargetAreaRatio=[0.005,0.03] # target sparsity range for spatial components
-        repeats=1 # how many repeations to run NMF algorithm
+        TargetAreaRatio=[0.01,0.05] # target sparsity range for spatial components
+        repeats=3 # how many repeations to run NMF algorithm
         iters0=[50] # number of intial NMF iterations, in which we downsample data and add components
-        iters=60 # number of main NMF iterations, in which we fine tune the components on the full data
-        lam1_s=0.0001# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
-        updateLambdaIntervals=2 # update sparsity parameter every updateLambdaIntervals iterations
-        addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
-        updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
-        Background_num=1 #number of background components - one of which at every repetion
-        bkg_per=0.01 # intialize of background shape at this percentile (over time) of video
-        sig=(15,15) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
-        
-        NonNegative=True # should we constrain activity and shapes to be non-negative?
-        FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
-        Connected=True # should we constrain all spatial component to be connected?
-        WaterShed=False # should we constrain all spatial component to have only one watershed component?
-#        SigmaMask=5       
-        
-    elif data_name=='BaylorAxons':
-        NumCent=0 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
-        mbs=[5] # temporal downsampling of data in intial phase of NMF
-        ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
-        TargetAreaRatio=[0.001,0.01] # target sparsity range for spatial components
-        repeats=1 # how many repeations to run NMF algorithm
-        iters0=[50] # number of intial NMF iterations, in which we downsample data and add components
-        iters=60 # number of main NMF iterations, in which we fine tune the components on the full data
+        iters=50 # number of main NMF iterations, in which we fine tune the components on the full data
         lam1_s=0.001# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
         updateLambdaIntervals=2 # update sparsity parameter every updateLambdaIntervals iterations
         addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
         updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
         Background_num=1 #number of background components - one of which at every repetion
+        bkg_per=0.1 # intialize of background shape at this percentile (over time) of video
+        sig=(200,200) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
+        
+        NonNegative=True # should we constrain activity and shapes to be non-negative?
+        FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
+        Connected=True # should we constrain all spatial component to be connected?
+        WaterShed=False # should we constrain all spatial component to have only one watershed component?
+        SigmaMask=3       
+        
+    elif data_name=='BaylorAxons':
+        NumCent=200 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+        mbs=[50] # temporal downsampling of data in intial phase of NMF
+        ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
+        TargetAreaRatio=[0.005,0.05] # target sparsity range for spatial components
+        repeats=20 # how many repeations to run NMF algorithm
+        iters0=[100] # number of intial NMF iterations, in which we downsample data and add components
+        iters=100 # number of main NMF iterations, in which we fine tune the components on the full data
+        lam1_s=1e-4# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
+        updateLambdaIntervals=2 # update sparsity parameter every updateLambdaIntervals iterations
+        addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
+        updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
+        Background_num=1 #number of background components - one of which at every repetion
         bkg_per=0.01 # intialize of background shape at this percentile (over time) of video
-        sig=(15,15) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
+        sig=(200,200) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
         
         NonNegative=True # should we constrain activity and shapes to be non-negative?
         FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
         Connected=True # should we constrain all spatial component to be connected?
         WaterShed=False # should we constrain all spatial component to have only one watershed component?        
-        SigmaMask=10    
+        SigmaMask=3   
 
     params_dict=dict([['data_name',data_name],['SuperVoxelize',SuperVoxelize],['NonNegative',NonNegative],
                       ['FinalNonNegative',FinalNonNegative],['mbs',mbs],['TargetAreaRatio',TargetAreaRatio],
@@ -228,32 +228,32 @@ if __name__ == "__main__":
     data=GetData(params.data_name)
     if params.SuperVoxelize==True:
         data=SuperVoxelize(data)        
-    
-    if params.NumCent>0:
-        cent=GetCentersData(data,params.data_name,params.NumCent)
-    else:
-        cent=np.reshape([],(0,data.ndim-1))   
-        
-    if do_NMF==True:        
+            
+    if do_NMF==True:         
         for rep in range(params.repeats):  
+            
+            if params.NumCent>0:
+                cent=GetCentersData(data,params.data_name,params.NumCent,rep)
+            else:
+                cent=np.reshape([],(0,data.ndim-1)) 
+                
             if rep>=params.Background_num:
                 adaptBias=False
             else:
                 adaptBias=True
-            MSE_array, shapes, activity, boxes = LocalNMF(
+            MSE_array, shapes, activity = LocalNMF(
                 data, cent, params.sig,TargetAreaRatio=params.TargetAreaRatio,updateLambdaIntervals=params.updateLambdaIntervals,addComponentsIntervals=params.addComponentsIntervals,WaterShed=params.WaterShed,SigmaMask=params.SigmaMask,
                 PositiveError=params.PositiveError,NonNegative=params.NonNegative,FinalNonNegative=params.FinalNonNegative,MedianFilt=params.MedianFilt,verbose=True,lam1_s=params.lam1_s, adaptBias=adaptBias,estimateNoise=params.estimateNoise,
                 Connected=params.Connected,SmoothBkg=params.SmoothBackground,FixSupport=params.FixSupport,bkg_per=params.bkg_per,iters0=params.iters0,iters=params.iters,mbs=params.mbs, ds=params.ds)
             
             L=len(shapes)
+            print str(L)+' components extracted'
             if L<=adaptBias:
                 break
             saveName=GetFileName(params_dict,rep)        
             f = file('NMF_Results/'+saveName, 'wb')
             
-            results=dict([['MSE_array',MSE_array], ['shapes',shapes], 
-                         ['activity',activity],['boxes',boxes],['cent',cent],
-                         ['params',params_dict]])
+            results=dict([['MSE_array',MSE_array], ['shapes',shapes],['activity',activity],['cent',cent],['params',params_dict]])
             cPickle.dump(results, f, protocol=cPickle.HIGHEST_PROTOCOL)
             f.close()
 #            print 'rep #',str(rep+1), ' finished'  
