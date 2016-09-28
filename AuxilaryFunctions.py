@@ -12,12 +12,8 @@ def GetFileName(params_dict,rep):
     params_Name+=str(params_dict['iters0'][0])+'_'+str(params_dict['iters'])+'intervals'+str(params_dict['updateLambdaIntervals'])
     if params_dict['TargetAreaRatio']!=[]: params_Name+='_Area'+str(params_dict['TargetAreaRatio'][0])+'_'+str(params_dict['TargetAreaRatio'][1])
     if params_dict['Background_num']>0: params_Name+='_Bkg'+str(params_dict['Background_num'])
-    if params_dict['estimateNoise']: params_Name+='_Noise'
-    if params_dict['PositiveError']: params_Name+='_PosErr'
     if params_dict['Connected']: params_Name+='_Connected'
-    if params_dict['FixSupport']: params_Name+='_FixSupport'
-    if params_dict['SuperVoxelize']: params_Name+='_SuperVoxelized'
-    if params_dict['FinalNonNegative']: params_Name+='_FinalNonNegative'
+    if params_dict['ThresholdData']: params_Name+='_ThresholdData'
     
     resultsName='NMF_results_'+ params_dict['data_name'] + '_Rep' + str(rep+1) +'of'+ str(params_dict['repeats']) +'_'+params_Name
     return resultsName
@@ -127,6 +123,18 @@ def GetData(data_name):
         data=np.asarray(data,dtype='float')  
         data=data[:,:200,:200] #take only a small patch
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+    elif data_name=='BaylorAxonsQuiet':           
+        temp=h5py.File(DataFolder + 'BaylorV1Axons/quietBlock.mat')
+        data=temp["quietBlock"]
+        data=np.asarray(data,dtype='float')  
+        data=data[:,150:350,150:350] #take only a small patch
+        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+    elif data_name=='BaylorAxonsActive':           
+        temp=h5py.File(DataFolder + 'BaylorV1Axons/activeBlock.mat')
+        data=temp["activeBlock"]
+        data=np.asarray(data,dtype='float')  
+        data=data[:,150:350,150:350] #take only a small patch
+        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
     else:
         print 'unknown dataset name!'
     return data
@@ -197,7 +205,12 @@ def GetCentersData(data,data_name,NumCent,rep):
     return new_cent
     
     
-
+def ThresholdData(data):
+    from BlockLocalNMF_AuxilaryFunctions import GetSnPSDArray
+    
+    sn_target,sn_std= GetSnPSDArray(data)
+    data[data<sn_target]=0
+    return data
 
 def SuperVoxelize(data):
 
@@ -277,16 +290,23 @@ def MergeComponents(shapes,activity,L,threshold,sig):
     L=L-len(deleted_indices)
     return shapes,activity,L
     
-def PruneComponents(shapes,activity,TargetAreaRatio,L,deleted_indices=[]):
+def PruneComponents(shapes,activity,L,TargetAreaRatio=[],deleted_indices=[]):
     
     if deleted_indices==[]:
         # If sparsity is too high or too low        
         cond1=0
         cond2=0
         for ll in range(L):
-            cond1=np.mean(shapes[ll]>0)<TargetAreaRatio[0]
-            cond2=np.mean(shapes[ll]>0)>(TargetAreaRatio[1]*3)
-            if cond1 or cond2:
+            S_normalization=np.sum(shapes[ll])
+            A_normalization=np.sum(activity[ll])
+            if ((A_normalization<=0) or (S_normalization<=0)):
+                cond0=True
+            else:
+                cond0=False
+            if TargetAreaRatio!=[]:
+                cond1=np.mean(shapes[ll]>0)<TargetAreaRatio[0]
+                cond2=np.mean(shapes[ll]>0)>(TargetAreaRatio[1]*3)
+            if cond0 or cond1 or cond2:
                 deleted_indices.append(ll) 
             
         # If highly correlated with motion artifact?
@@ -375,6 +395,7 @@ def ThresholdShapes(shapes,adaptBias,TargetAreaRatio,MaxRatio):
 #    adaptBias - should we skip last component
 
     from scipy.ndimage.measurements import label
+    from BlockLocalNMF_AuxilaryFunctions import GetSnPSD
     rho=2 #exponential search parameter
     L=len(shapes)-adaptBias
 
@@ -438,7 +459,12 @@ def ThresholdShapes(shapes,adaptBias,TargetAreaRatio,MaxRatio):
     else:
         for ll in range(L): 
             temp=np.copy(shapes[ll])
-            threshold=MaxRatio*np.max(temp)
+            if MaxRatio!=[]:
+                threshold=MaxRatio*np.max(temp)
+            else:
+                temp=shapes[ll]
+                temp2=temp[temp>0].ravel()
+                threshold= GetSnPSD(temp2)
             temp[temp<threshold]=0
             shapes[ll]=temp
     return shapes

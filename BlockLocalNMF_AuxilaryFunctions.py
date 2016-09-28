@@ -10,10 +10,18 @@ from scipy.signal import welch
 from scipy.ndimage.measurements import label
 from skimage.morphology import watershed
 from skimage.feature import peak_local_max
-from scipy.ndimage.filters import gaussian_filter
-from scipy.ndimage.filters import median_filter
+from scipy.ndimage.filters import median_filter,gaussian_filter,gaussian_filter1d
+from scipy.linalg import eigh
 
-def HALS4activity(data, S, activity,NonNegative,lam1_t,lam2_t,iters=1):
+
+def gaussian_filter_spatial(X, Sigma,spatial_dims):
+    X=X.reshape((-1,) + spatial_dims) 
+    for dd in range(1,len(spatial_dims)+1):
+        X=gaussian_filter1d(X, Sigma, axis=dd) 
+    X=X.reshape((len(X),-1))   
+    return X
+    
+def HALS4activity(data, S, activity,NonNegative,lam1_t,lam2_t,dims,Sigma,iters=1):
     
 #        ind=np.squeeze(np.sum(S,0)>0) # find spatial support of components
 #        
@@ -24,8 +32,14 @@ def HALS4activity(data, S, activity,NonNegative,lam1_t,lam2_t,iters=1):
 #            A = S_comp.dot(data_comp.T)
 #            B = S_comp.dot(S_comp.T)
 #        else:
-    A = S.dot(data.T)
-    B = S.dot(S.T)
+    
+    if Sigma!=[]:
+        GS=gaussian_filter_spatial(S, Sigma,dims[1:])  
+    else:
+        GS=S
+    
+    A = GS.dot(data.T)
+    B = GS.dot(S.T)
 
     for _ in range(iters):
         for ll in range(len(S)):
@@ -53,13 +67,51 @@ def HALS4shape(data, S, activity,mask,lam1_s,lam2_s,adaptBias,iters=1):
             if ll == L:
                 S[ll] += np.nan_to_num((C[ll] - np.dot(D[ll], S)-lam1_s[ll]-lam2_s*S[ll]) / D[ll, ll])
             else:
-                S[ll, mask[ll]] += np.nan_to_num((C[ll, mask[ll]]
-                                               - np.dot(D[ll], S[:, mask[ll]])-lam1_s[ll,mask[ll]]-lam2_s*S[ll,mask[ll]])/ D[ll, ll])
+                S[ll, mask[ll]] += np.nan_to_num((C[ll, mask[ll]]- np.dot(D[ll], S[:, mask[ll]])-lam1_s[ll,mask[ll]]-lam2_s*S[ll,mask[ll]])/ D[ll, ll])
+
 #                if NonNegative:
-            S[ll][S[ll] < 0] = 0
+            S[ll][S[ll] < 0] = 0 #add mask here
     # normalize/delete components
 
     return S 
+    
+def FISTA4shape(data, S, activity,mask,lam1_s,adaptBias,Sigma,dims,iters=30):    
+    
+    C = activity.dot(data)   
+    spatial_dims=dims[1:]
+    C=gaussian_filter_spatial(C, Sigma,spatial_dims) 
+
+    D = activity.dot(activity.T)
+    L=len(activity)
+    SS=np.copy(S)
+    
+    t_next = 1
+    Lip=2*eigh(D, eigvals_only=True, eigvals=(L-1,L-1)) # lipshitc constant (since Gaussian kerenel that sums to 1)
+    for kk in range(iters):
+        S_prev = S + 0
+        t = t_next + 0         
+        t_next = (1 + np.sqrt(1 + 4 * (t ** 2))) / 2 
+        GS=gaussian_filter_spatial(SS, 2*Sigma,spatial_dims)
+        
+        S = SS - (2 / Lip) * (np.dot(D,GS)  - C)- lam1_s/Lip        
+        S[S<0]=0
+        SS = S + (t - 1) / t_next * (S - S_prev)
+        
+#        for ll in range(L-adaptBias):
+#            if ll < L:
+#                S[ll,mask[ll]] = SS[ll,mask[ll]] - (2 / Lip) * (np.dot(D[ll],GS[:,mask[ll]])  - C[ll,mask[ll]])
+#                S[ll,mask[ll]] = S[ll,mask[ll]] - lam1_s[ll,mask[ll]]/Lip  
+#                ind=S[ll,mask[ll]]<0
+#                S[ll,mask[ll]][ind]=0
+#                SS[ll,mask[ll]] = S[ll,mask[ll]] + (t - 1) / t_next * (S[ll,mask[ll]] - S_prev[ll,mask[ll]])
+#            else:
+#                S[ll] = SS[ll] - (2 / Lip) * (np.dot(D[ll],GS[:])  - C[ll])
+#                S[ll] = S[ll] - lam1_s[ll]/Lip  
+#                ind=S[ll]<0
+#                S[ll][ind]=0
+#                SS[ll] = S[ll] + (t - 1) / t_next * (S[ll] - S_prev[ll])
+
+    return S
     
 def RenormalizeDeleteSort( S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt):
     L=len(S)-adaptBias
@@ -288,6 +340,7 @@ def GetSnPSD(Y):
     ff, psd_Y = welch(Y, nperseg=round(L / 8))
     sn = np.sqrt(np.mean(psd_Y[ff > .3] / 2))
     return sn
+
 
 # Estimate noise level for an array of time series
 def GetSnPSDArray(Y,f_low=10,f_high=0.6):

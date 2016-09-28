@@ -6,9 +6,12 @@ def PlotAll(SaveNames,params):
     import matplotlib.animation as animation
     from matplotlib.backends.backend_pdf import PdfPages
 #    from scipy.ndimage.measurements import label    
-    from AuxilaryFunctions import GetRandColors, max_intensity,SuperVoxelize,GetData,PruneComponents,SplitComponents,ThresholdShapes,MergeComponents
+    from AuxilaryFunctions import GetRandColors, max_intensity,SuperVoxelize,GetData,PruneComponents,SplitComponents,ThresholdShapes,MergeComponents,ThresholdData
     from BlockLocalNMF_AuxilaryFunctions import HALS4activity
     from mpl_toolkits.axes_grid1 import make_axes_locatable
+    import sys
+    sys.path.append('Constrained_NMF/ca_source_extraction/')
+    from Deconvolution import update_temporal_components,CNMFSetParms
 
     ## plotting params 
     # what to plot 
@@ -29,13 +32,14 @@ def PlotAll(SaveNames,params):
     close_figs=True#close all figs right after saving (to avoid memory overload)
     # PostProcessing   
     Split=False   
-    Threshold=False #threshold shapes in the end and keep only connected components
+    Threshold=False   #threshold shapes in the end and keep only connected components
     Prune=False # Remove "Bad" components (where bad is defined within SplitComponent fucntion)
     Merge=True # Merge highly correlated nearby components
     FineTune=True # SHould we fine tune activity after post-processing? (mainly after merging)
     IncludeBackground=False #should we include the background as an extracted component?
     
     # how to plot
+    detrend=True #should we detrend the data (remove background component)?
     scale=2 #scale colormap to enhance colors
     satuartion_percentile=96 #saturate colormap ont this percentile, when ma=percentile is used
     dpi=200 #for videos
@@ -47,6 +51,10 @@ def PlotAll(SaveNames,params):
     data=GetData(params.data_name)
     if params.SuperVoxelize==True:
         data=SuperVoxelize(data)
+    
+    if params.ThresholdData==True:
+        data=ThresholdData(data)        
+        
     dims=np.shape(data)
     
     if len(dims)<4:
@@ -88,8 +96,8 @@ def PlotAll(SaveNames,params):
                 print 'results file not found!!'              
             else:
                 break            
-        S=results['shapes']
-        A=results['activity']
+        SS=results['shapes']
+        AA=results['activity']
 
         if rep>=params.Background_num:
             adaptBias=False
@@ -98,20 +106,24 @@ def PlotAll(SaveNames,params):
             
         if IncludeBackground==True:
             adaptBias=False        
-        
-        detrended_data= detrended_data - adaptBias*((A[-1].reshape(-1, 1)).dot(S[-1].reshape(1, -1))).reshape(dims)
-        
-        L=len(A)-adaptBias
+               
+        L=len(AA)-adaptBias
         if L==0: #Stop if we encounter a file with zero components
             break
-        S=S[:-adaptBias]
-        A=A[:-adaptBias]
+        S=SS[:-adaptBias]
+        b=SS[L:(L+adaptBias)]
+        A=AA[:-adaptBias]
+        f=AA[L:(L+adaptBias)]
         if rep==0:
             shapes=S
             activity=A
+            background_shapes=b
+            background_activity=f
         else:
             shapes=np.append(shapes,S,axis=0)
             activity=np.append(activity,A,axis=0) 
+            background_shapes=np.append(background_shapes,b,axis=0)
+            background_activity=np.append(background_activity,f,axis=0) 
         
     L=len(shapes)
     adaptBias=0
@@ -124,26 +136,29 @@ def PlotAll(SaveNames,params):
         
     if Prune==True:
 #           deleted_indices=[5,9,11,14,15,17,24]+range(25,36)
-        shapes,activity,L=PruneComponents(shapes,activity,params.TargetAreaRatio,L,[])
+        shapes,activity,L=PruneComponents(shapes,activity,L,params.TargetAreaRatio)
     
+    activity_NonNegative=np.copy(activity)
+    activity_NonNegative[activity_NonNegative<0]=0
     if FineTune==True:
-        T=np.shape(data)[0]
-        activity=HALS4activity(data.reshape((T,-1)), shapes.reshape((len(shapes),-1)), activity,params.NonNegative,lam1_t=0,lam2_t=0,iters=30)
-
-    orig_shapes=np.copy(shapes) #shapes before thresholding
-    if Threshold==True:            
-        shapes=ThresholdShapes(shapes,adaptBias,[],MaxRatio=0.3)
+#        activity=HALS4activity(data.reshape((np.shape(data)[0],-1)), shapes.reshape((len(shapes),-1)), activity,params.NonNegative,lam1_t=0,lam2_t=0,iters=30)
+        options=CNMFSetParms(data, n_processes=1)
+        activity,background_activity,S,bl,c1,sn,g,junk = update_temporal_components(data.reshape((len(data),-1)).transpose(), shapes.reshape((len(shapes),-1)).transpose(), background_shapes.reshape((len(background_shapes),-1)).transpose(), activity,background_activity,**options['temporal_params'])
     
 
+    detrended_data= detrended_data - background_activity.T.dot(background_shapes.reshape((len(background_shapes), -1))).reshape(dims)        
+
+    if Threshold==True:            
+        shapes=ThresholdShapes(shapes,adaptBias,[],MaxRatio=[])
                 
     if plot_residual_projections or video_shapes or video_residual or video_slices or video_residual_2D:
-        activity_NonNegative=np.copy(activity)
-        activity_NonNegative[activity_NonNegative<0]=0
         colors=GetRandColors(L)
         color_shapes=np.transpose(shapes.reshape(L, -1,1)*colors,[1,0,2]) #weird transpose for tensor dot product next line
-        denoised_data = denoised_data + (activity_NonNegative.T.dot(color_shapes)).reshape(tuple(dims)+(3,))        
-        residual = detrended_data - activity_NonNegative.T.dot(orig_shapes.reshape(L, -1)).reshape(dims)              
-
+        denoised_data = denoised_data + (activity_NonNegative.T.dot(color_shapes)).reshape(tuple(dims)+(3,))   
+        residual = detrended_data - activity_NonNegative.T.dot(shapes.reshape(L, -1)).reshape(dims)
+    
+    if detrend==True:
+        data=detrended_data
  
 #%% After loading loop - Normalize (colored) denoised data
     if plot_residual_projections or video_shapes or video_residual or video_slices or video_residual_2D:
@@ -171,25 +186,26 @@ def PlotAll(SaveNames,params):
     b=ceil(sz/a)  
     
     if plot_activities:
-        pp = PdfPages(Results_folder + 'Activities'+resultsName+'.pdf')
+        pp = PdfPages(Results_folder + 'Activities'+resultsName+'.pdf')        
         for ii in range(L+adaptBias):
             if index==0:
-                fig0=plt.figure(figsize=(dims[1] , dims[2]))
-#                    fig0=plt.figure(figsize=(11,18))
+#                fig0=plt.figure(figsize=(dims[1] , dims[2]))
+                 fig0=plt.figure(figsize=(11,18))
             ax = plt.subplot(a,b,index+1)
-            pl=plt.plot(activity[ii])
+#            dt=1/30 # 30 Hz sample rate
+            time=range(len(activity[ii]))
+            plt.plot(time,activity[ii],linewidth=3)
             plt.setp(ax, xticks=[],yticks=[0])
-            plt.setp(pl,'linewidth','2.0')
             # component number
             ax.text(0.02, 0.8, str(ii),
                 verticalalignment='bottom', horizontalalignment='left',
                 transform=ax.transAxes,
                 color='black',weight='bold', fontsize=13)
             index+=1   
-            if (ii%ComponentsInFig==(ComponentsInFig-1)) or ii==L+adaptBias-1: 
-                plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+            if ((ii%ComponentsInFig)==(ComponentsInFig-1)) or ii==(L+adaptBias-1):                 
                 index=0
                 if save_plot==True:
+                    plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
                     pp.savefig(fig0)    
         pp.close()
         if close_figs:
@@ -237,7 +253,7 @@ def PlotAll(SaveNames,params):
             transform=ax.transAxes,
             color='white',weight='bold', fontsize=13)
             #L^p
-            for p in range(2,2,6):
+            for p in range(2,6,2):
                 Lp=(np.sum(shapes[ll]**p))**(1/float(p))/np.sum(shapes[ll])
                 Lp_str=str(np.round(Lp*100,2))+'%' #'L'+str(p)+'='+
                 ax.text(0.02+p*0.2, 0.02, Lp_str,

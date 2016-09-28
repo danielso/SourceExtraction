@@ -1,12 +1,12 @@
 from numpy import asarray, percentile, zeros, ones, ix_, arange, exp, prod, repeat
 import numpy as np
 from BlockLocalNMF_AuxilaryFunctions import  HALS4activity, HALS4shape,RenormalizeDeleteSort,addComponent,GetBox, \
-RegionAdd,RegionCut,DownScale,LargestConnectedComponent,LargestWatershedRegion,SmoothBackground,GetSnPSDArray,ExponentialSearch,GrowMasks
+RegionAdd,RegionCut,DownScale,LargestConnectedComponent,LargestWatershedRegion,SmoothBackground,GetSnPSDArray,ExponentialSearch,GrowMasks,GetSnPSD,FISTA4shape
 from AuxilaryFunctions import PruneComponents,MergeComponents        
 
 def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=False,adaptBias=True,TargetAreaRatio=[],estimateNoise=False,
-             PositiveError=False,MedianFilt=False,Connected=False,FixSupport=False, WaterShed=False,SmoothBkg=False,SigmaMask=[],
-             updateLambdaIntervals=2,updateRhoIntervals=2,addComponentsIntervals=1,bkg_per=20,
+             PositiveError=False,MedianFilt=False,Connected=False,FixSupport=False, WaterShed=False,SmoothBkg=False,FineTune=True,SigmaMask=[],
+             updateLambdaIntervals=2,updateRhoIntervals=2,addComponentsIntervals=1,bkg_per=20,SigmaBlur=[],
              iters=10,iters0=[30], mbs=[1], ds=1,lam1_s=0,lam1_t=0,lam2_s=0,lam2_t=0):
     """
     Parameters
@@ -41,8 +41,12 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         Remove local peaks from background component
     FixSupport : boolean
         do not allow spatial components to be non-zero where sub-sampled spatial components are zero
+    FineTune :  boolean
+        fine tune main iterations on full data, if not, use (last) downsampled data
     SigmaMask : scalar or empty
         if not [], then update masks so that they are SigmaMasks around non-zero support of shapes
+    SigmaBlur : scalar
+        if not [], then de-blur spatial components using Gaussian Kernel of this width
     updateLambdaIntervals : int
         update lam1_s every this number of HALS iterations, to match contraints
     updateRhoIntervals : int
@@ -79,7 +83,12 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
     boxes : array, shape (L, D, 2)
         edges of the boxes in which each neuronal shapes lie (empty if no components found)
     """
-
+    
+    # Catch Errors
+    if ds!=1 and SigmaBlur!=[]:
+        raise NameError('case ds!=1 and SigmaBlur!=[] no yet written in NMF code')
+        
+    
     # Initialize Parameters
     dims = data.shape
     D = len(dims)
@@ -214,13 +223,16 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                             new_lam=lam1_s0*np.ones_like(data0[0,:]).reshape(1,-1)
                             lam1_s=np.insert(lam1_s,0,values=new_lam,axis=0)
                             ES=ExponentialSearch(lam1_s) #we need to restart exponential search each time we add a component
-                        
-                S = HALS4shape(data0, S, activity,mask,lam1_s,lam2_s,adaptBias,inner_iterations)
+                if SigmaBlur==[]:
+                    S = HALS4shape(data0, S, activity,mask,lam1_s,lam2_s,adaptBias,inner_iterations)
+                else:
+                    S=FISTA4shape(data0, S, activity,mask,lam1_s,adaptBias,SigmaBlur,dims0)
+                
                 if Connected==True:
                     S=LargestConnectedComponent(S,dims0,adaptBias)
                 if WaterShed==True:
                     S=LargestWatershedRegion(S,dims0,adaptBias)
-                activity = HALS4activity(data0, S, activity,NonNegative,lam1_t,lam2_t,inner_iterations)                                
+                activity = HALS4activity(data0, S, activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,inner_iterations)                                
                 if SigmaMask!=[]:
                     mask=GrowMasks(S,mask,boxes,dims0,adaptBias,SigmaMask)
                 S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)
@@ -243,73 +255,86 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                 
                 activity = ones((L + adaptBias, len(data0))) * activity.mean(1).reshape(-1, 1)
                 lam1_s=lam1_s*mbs[it+1]/mbs[it]
-                activity = HALS4activity(data0, S, activity,NonNegative,lam1_t,lam2_t,30)
+                activity = HALS4activity(data0, S, activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,30)
                 S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)
                 lam1_s=ES.lam
 
     ### Back to full data ##
         if L==0: #if no non-background components found, return empty arrays
             return [], [], [], []
-            
-        activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1)
-        if D==4:
-            S = repeat(repeat(repeat(S.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2), ds[2], 3)
-            lam1_s= repeat(repeat(repeat(lam1_s.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2), ds[2], 3)
-        else:
-            S = repeat(repeat(S.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2)
-            lam1_s= repeat(repeat(lam1_s.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2)
-        for dd in range(1,D):
-            while S.shape[dd]<dims[dd]:
-                shape_append=np.array(S.shape)
-                shape_append[dd]=1
-                S=np.append(S,values=np.take(S,-1,axis=dd).reshape(shape_append),axis=dd)
-                lam1_s=np.append(lam1_s,values=np.take(lam1_s,-1,axis=dd).reshape(shape_append),axis=dd)
-        S=S.reshape(L + adaptBias, -1)
-        lam1_s=lam1_s.reshape(L+ adaptBias,-1)
-        for ll in range(L):
-            boxes[ll] = GetBox(centers[ll], R, dims[1:])
-            temp = zeros(dims[1:])
-            temp[map(lambda a: slice(*a), boxes[ll])] = 1
-            mask[ll] = np.where(temp.ravel())[0]
         
-        if FixSupport:
+        if FineTune:
+            activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1)
+            data0=data
+            dims0=dims
+            if D==4:
+                S = repeat(repeat(repeat(S.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2), ds[2], 3)
+                lam1_s= repeat(repeat(repeat(lam1_s.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2), ds[2], 3)
+            else:
+                S = repeat(repeat(S.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2)
+                lam1_s= repeat(repeat(lam1_s.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2)
+            for dd in range(1,D):
+                while S.shape[dd]<dims[dd]:
+                    shape_append=np.array(S.shape)
+                    shape_append[dd]=1
+                    S=np.append(S,values=np.take(S,-1,axis=dd).reshape(shape_append),axis=dd)
+                    lam1_s=np.append(lam1_s,values=np.take(lam1_s,-1,axis=dd).reshape(shape_append),axis=dd)
+            S=S.reshape(L + adaptBias, -1)
+            lam1_s=lam1_s.reshape(L+ adaptBias,-1)
             for ll in range(L):
-                lam1_s[ll,S[ll]==0]=float("inf")
-#                lam1_s[ll,S[ll]>0]=0
+                boxes[ll] = GetBox(centers[ll], R, dims[1:])
+                temp = zeros(dims[1:])
+                temp[map(lambda a: slice(*a), boxes[ll])] = 1
+                mask[ll] = np.where(temp.ravel())[0]
             
-        
-        ES=ExponentialSearch(lam1_s)
-        activity = HALS4activity(data, S, activity,NonNegative,lam1_t,lam2_t, 30)
-        S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)
-        lam1_s=ES.lam
-        
-        if estimateNoise:
-            sn_target,sn_std= GetSnPSDArray(data)#target noise level
-        else:
-            sn_target=np.zeros(prod(dims[1:]))
-            sn_std=sn_target
-        MSE_target = np.mean(sn_target**2)
-        MSE_std=np.mean(sn_std**2)
-#        MSE = np.mean((data0-np.dot(activity.T,S))**2)
+            if FixSupport:
+                for ll in range(L):
+                    lam1_s[ll,S[ll]==0]=float("inf")
+    #                lam1_s[ll,S[ll]>0]=0
+                
+            
+            ES=ExponentialSearch(lam1_s)
+            activity = HALS4activity(data0, S, activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur, 30)
+            S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)
+            lam1_s=ES.lam
+            
+            if estimateNoise:
+                sn_target,sn_std= GetSnPSDArray(data0)#target noise level
+            else:
+                sn_target=np.zeros(prod(dims0[1:]))
+                sn_std=sn_target
+            MSE_target = np.mean(sn_target**2)
+            MSE_std=np.mean(sn_std**2)
+    #        MSE = np.mean((data0-np.dot(activity.T,S))**2)
         
 #### Main Loop ####
   
     print 'starting main NMF loop'
     for kk in range(iters):
-        S = HALS4shape(data, S, activity,mask,lam1_s,lam2_s,adaptBias,inner_iterations)
+        lam1_s=ES.lam
+        if SigmaBlur==[]:
+            S = HALS4shape(data0, S, activity,mask,lam1_s,lam2_s,adaptBias,inner_iterations)
+        else:
+            S = FISTA4shape(data0, S, activity,mask,lam1_s,adaptBias,SigmaBlur,dims0)
+#        lam1_s=0*ES.lam
+#        for ll in range (L):
+#                temp=S[ll,mask[ll]]
+#                temp2=temp[temp>0].ravel()
+#                if len(temp2)>8:
+#                    lam1_s[ll] = GetSnPSD(temp2)*0.5
+        
         if Connected==True:            
-            S=LargestConnectedComponent(S,dims,adaptBias)
+            S=LargestConnectedComponent(S,dims0,adaptBias)
         if WaterShed==True:
-            S=LargestWatershedRegion(S,dims,adaptBias)
+            S=LargestWatershedRegion(S,dims0,adaptBias)
         if kk==iters-1:
             if FinalNonNegative==False:
                 NonNegative=False
-        activity = HALS4activity(data, S, activity,NonNegative,lam1_t,lam2_t,inner_iterations)
+        activity = HALS4activity(data0, S, activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,inner_iterations)
 #       S=LargestConnectedComponent(S)   
         if SigmaMask!=[]:
-            mask=GrowMasks(S,mask,boxes,dims,adaptBias,SigmaMask)
+            mask=GrowMasks(S,mask,boxes,dims0,adaptBias,SigmaMask)
         S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)
-        lam1_s=ES.lam
 
         # Recenter
         # if kk % 30 == 20:
@@ -331,7 +356,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         # Measure MSE
         print 'main iteration kk=',kk,'L=',L
         if (kk+1)%updateLambdaIntervals==0:            
-            sn=np.sqrt((Energy-2*np.sum(np.dot(activity,data)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0))/dims[0])
+            sn=np.sqrt((Energy-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0))/dims0[0])
             delta_sn=sn-sn_target
             MSE = np.mean(sn**2)
             
@@ -383,11 +408,14 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                 MSE_array.append(MSE)
     
     # Some post-processing 
-    S,activity,L=PruneComponents(S.reshape((-1,) + dims[1:]),activity,TargetAreaRatio,L,[])
+    S=S.reshape((-1,) + dims[1:])
+    S,activity,L=PruneComponents(S,activity,L)
     if len(S)>1:
         S,activity,L=MergeComponents(S,activity,L,threshold=0.95,sig=10)    
-        activity=HALS4activity(data, S.reshape((len(S),-1)), activity,NonNegative,lam1_t=0,lam2_t=0,iters=30)
-
+        if not FineTune:
+            activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1)
+        activity=HALS4activity(data, S.reshape((len(S),-1)), activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,iters=30)
+    
     return asarray(MSE_array), S, activity
 
 
