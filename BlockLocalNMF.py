@@ -411,7 +411,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
     S=S.reshape((-1,) + dims[1:])
     S,activity,L=PruneComponents(S,activity,L)
     if len(S)>1:
-        S,activity,L=MergeComponents(S,activity,L,threshold=0.95,sig=10)    
+        S,activity,L=MergeComponents(S,activity,L,threshold=0.9,sig=10)    
         if not FineTune:
             activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1)
         activity=HALS4activity(data, S.reshape((len(S),-1)), activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,iters=30)

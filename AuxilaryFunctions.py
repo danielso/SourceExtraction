@@ -129,6 +129,12 @@ def GetData(data_name):
         data=np.asarray(data,dtype='float')  
         data=data[:,150:350,150:350] #take only a small patch
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+    elif data_name=='BaylorAxonsJiakun1':           
+        temp=h5py.File(DataFolder + 'BaylorV1Axons/11273_2_1(3).mat')
+        data=temp["X"]
+        data=np.asarray(data,dtype='float')  
+        data=data[:,200:450,200:450] #take only a small patch
+        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
     elif data_name=='BaylorAxonsActive':           
         temp=h5py.File(DataFolder + 'BaylorV1Axons/activeBlock.mat')
         data=temp["activeBlock"]

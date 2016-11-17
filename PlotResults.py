@@ -39,7 +39,7 @@ def PlotAll(SaveNames,params):
     IncludeBackground=False #should we include the background as an extracted component?
     
     # how to plot
-    detrend=True #should we detrend the data (remove background component)?
+    detrend=False #should we detrend the data (remove background component)?
     scale=2 #scale colormap to enhance colors
     satuartion_percentile=96 #saturate colormap ont this percentile, when ma=percentile is used
     dpi=200 #for videos
@@ -132,7 +132,7 @@ def PlotAll(SaveNames,params):
         shapes,activity,L,all_local_max=SplitComponents(shapes,activity,adaptBias)   
     
     if Merge==True:
-        shapes,activity,L=MergeComponents(shapes,activity,L,threshold=0.95,sig=10)
+        shapes,activity,L=MergeComponents(shapes,activity,L,threshold=0.9,sig=10)
         
     if Prune==True:
 #           deleted_indices=[5,9,11,14,15,17,24]+range(25,36)
@@ -142,8 +142,12 @@ def PlotAll(SaveNames,params):
     activity_NonNegative[activity_NonNegative<0]=0
     if FineTune==True:
 #        activity=HALS4activity(data.reshape((np.shape(data)[0],-1)), shapes.reshape((len(shapes),-1)), activity,params.NonNegative,lam1_t=0,lam2_t=0,iters=30)
-        options=CNMFSetParms(data, n_processes=1)
-        activity,background_activity,S,bl,c1,sn,g,junk = update_temporal_components(data.reshape((len(data),-1)).transpose(), shapes.reshape((len(shapes),-1)).transpose(), background_shapes.reshape((len(background_shapes),-1)).transpose(), activity,background_activity,**options['temporal_params'])
+        options=CNMFSetParms(data, n_processes=1,p=1)
+        options['preprocess_params']['noise_range']=[0.1,0.5]
+
+#        g_calcium=(1-1/30)*np.ones((len(activity),1)) #Jake's Guess - add g=g_calcium to update_temporal_components inputs to fix AR constants
+        if params.Background_num<=1: #the constrained foopsi code does not work with more than one background component
+            activity,background_activity,S,bl,c1,sn,g,junk = update_temporal_components(data.reshape((len(data),-1)).transpose(), shapes.reshape((len(shapes),-1)).transpose(), background_shapes.reshape((len(background_shapes),-1)).transpose(), activity,background_activity,**options['temporal_params'])
     
 
     detrended_data= detrended_data - background_activity.T.dot(background_shapes.reshape((len(background_shapes), -1))).reshape(dims)        

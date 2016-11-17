@@ -48,7 +48,7 @@ cmap='gnuplot'
 
 K=len(sig)
 a=np.ceil(np.sqrt(K))
-b=np.ceil(K/a)
+b=2*np.ceil(K/a)
 
 pp = PdfPages('Components Correlations.pdf')
 fig=plt.figure(figsize=(18,11))
@@ -59,10 +59,16 @@ for ii in range(K):
     shapes_cov=np.dot(shapes_array,shapes_array.T)
     shape_vars=np.diag(shapes_cov).reshape(-1,1)
     shapes_corr=np.nan_to_num(shapes_cov/np.sqrt(np.dot(shape_vars,shape_vars.T)))
-    ax=plt.subplot(a,b,ii+1)
+    ax=plt.subplot(a,b,2*ii+1)
     im=plt.imshow(shapes_corr, interpolation='none',cmap=cmap)
     plt.colorbar(im)
-    plt.title('Spatial Correlation, Sig='+str(sig[ii]))
+    plt.title('Spatial Corr. Matrix, Sig='+str(sig[ii]))
+    ax2=plt.subplot(a,b,2*ii+2)
+    hist, bin_edges = np.histogram(np.ndarray.flatten(shapes_corr),bins=30)
+    bins=(bin_edges[:-1]+bin_edges[1:])/2
+    im2=plt.plot(bins,hist,linewidth=2)
+    plt.title('Spatial Corr.  Hist., Sig='+str(sig[ii]))
+    
 pp.savefig(fig)
 
 dims_activity=activity_array[0].shape
@@ -73,10 +79,15 @@ for ii in range(K):
     activity_cov=np.dot(activity_array,activity_array.T)
     activity_vars=np.diag(activity_cov).reshape(-1,1)
     activity_corr=activity_cov/np.sqrt(np.dot(activity_vars,activity_vars.T))
-    ax2=plt.subplot(a,b,ii+1)
+    ax2=plt.subplot(a,b,2*ii+1)
     im2=plt.imshow(activity_corr, interpolation='none',cmap=cmap)
     plt.colorbar(im2)
-    plt.title('Temporal Correlation, Sig='+str(sig[ii]))
+    plt.title('Temporal Corr. Mat, Sig='+str(sig[ii]))
+    ax2=plt.subplot(a,b,2*ii+2)
+    hist, bin_edges = np.histogram(np.ndarray.flatten(activity_corr),bins=30)
+    bins=(bin_edges[:-1]+bin_edges[1:])/2
+    im2=plt.plot(bins,hist,linewidth=2)
+    plt.title('Temproa Corr.  Hist., Sig='+str(sig[ii]))
     
 pp.savefig(fig)
 pp.close()
