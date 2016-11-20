@@ -2,11 +2,14 @@ from numpy import asarray, percentile, zeros, ones, ix_, arange, exp, prod, repe
 import numpy as np
 from BlockLocalNMF_AuxilaryFunctions import  HALS4activity, HALS4shape,RenormalizeDeleteSort,addComponent,GetBox, \
 RegionAdd,RegionCut,DownScale,LargestConnectedComponent,LargestWatershedRegion,SmoothBackground,GetSnPSDArray,ExponentialSearch,GrowMasks,GetSnPSD,FISTA4shape
-from AuxilaryFunctions import PruneComponents,MergeComponents        
+from AuxilaryFunctions import PruneComponents,MergeComponents      
+import sys
+sys.path.append('OASIS/')
+from functions import deconvolve  
 
 def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=False,adaptBias=True,TargetAreaRatio=[],estimateNoise=False,
-             PositiveError=False,MedianFilt=False,Connected=False,FixSupport=False, WaterShed=False,SmoothBkg=False,FineTune=True,SigmaMask=[],
-             updateLambdaIntervals=2,updateRhoIntervals=2,addComponentsIntervals=1,bkg_per=20,SigmaBlur=[],
+             PositiveError=False,MedianFilt=False,Connected=False,FixSupport=False, WaterShed=False,SmoothBkg=False,FineTune=True,Deconvolve=False,
+             SigmaMask=[],updateLambdaIntervals=2,updateRhoIntervals=2,addComponentsIntervals=1,bkg_per=20,SigmaBlur=[],
              iters=10,iters0=[30], mbs=[1], ds=1,lam1_s=0,lam1_t=0,lam2_s=0,lam2_t=0):
     """
     Parameters
@@ -43,6 +46,8 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         do not allow spatial components to be non-zero where sub-sampled spatial components are zero
     FineTune :  boolean
         fine tune main iterations on full data, if not, use (last) downsampled data
+    Deconvolve : boolean
+        Deconvolve activity to get smoothed (denoised) calcium trace. This is done only on the main itreations, and if FineTune=True
     SigmaMask : scalar or empty
         if not [], then update masks so that they are SigmaMasks around non-zero support of shapes
     SigmaBlur : scalar
@@ -331,6 +336,10 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
             if FinalNonNegative==False:
                 NonNegative=False
         activity = HALS4activity(data0, S, activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,inner_iterations)
+        if FineTune and Deconvolve:
+            for ll in range(L):
+                if np.sum(np.abs(activity[ll])>0)>30: #make sure there is enough signal before we try to deconvolve
+                    activity[ll], _, _, _, _ = deconvolve(activity[ll], penalty=0)
 #       S=LargestConnectedComponent(S)   
         if SigmaMask!=[]:
             mask=GrowMasks(S,mask,boxes,dims0,adaptBias,SigmaMask)

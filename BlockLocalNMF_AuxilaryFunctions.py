@@ -144,7 +144,7 @@ def RenormalizeDeleteSort( S, activity, mask,centers,boxes,ES,adaptBias,MedianFi
     L=len(S)-adaptBias
     
     #sort components according to magnitude
-    magnitude=np.sum(S[:L],axis=1)*np.max(activity[:L],axis=1)
+    magnitude=np.sum(S[:L],axis=1)*np.mean(activity[:L],axis=1)
     sort_indices = np.argsort(magnitude)[::-1]
     centers=centers[sort_indices]
     boxes=boxes[sort_indices]

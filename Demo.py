@@ -6,7 +6,7 @@ def GetDefaultParams():
     # choose dataset name (function GetData will use this to fetch the correct dataset)
     data_name_set=['Hillman','HillmanSmall','Sophie2D','Sophie3D','SophieVoltage3D','Sophie3DSmall',
     'SaraSmall','Sara19DEC2015_w1t1','PhilConfocal','PhilMFM','PhilConfocal2','BaylorAxonsSmall',
-    'BaylorAxons','BaylorAxonsQuiet','BaylorAxonsActive','BaylorAxonsJiakun1']
+    'BaylorAxons','BaylorAxonsQuiet','BaylorAxonsActive','BaylorAxonsJiakun1','BaylorAxonsJiakun2']
     data_name=data_name_set[1]
     
     # "default" parameters - for additional information see "LocalNMF" in BlockLocalNMF
@@ -32,8 +32,9 @@ def GetDefaultParams():
     Connected=False # should we constrain all spatial component to be connected?
     WaterShed=False # should we constrain all spatial component to have only one watershed component?
     MedianFilt=False # should we perfrom median filtering of shape?
-    FineTune=False # Should use the full data at the main iterations (to fine tune shapes)? If not then just extract the activity and not the shapes from the full data
-    ThresholdData= True  # threshold data with PSD level
+    FineTune=True # Should use the full data at the main iterations (to fine tune shapes)? If not then just extract the activity and not the shapes from the full data
+    ThresholdData= False  # threshold data with PSD level
+    Deconvolve=False #Deconvolve activity to get smoothed (denoised) calcium trace
     
     # experimental stuff - don't use for now
     estimateNoise=False # should we tune sparsity and number of neurons to reach estimated noise level?
@@ -211,8 +212,9 @@ def GetDefaultParams():
         bkg_per=0.1 # intialize of background shape at this percentile (over time) of video
         sig=(200,200) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
         
-        ThresholdData= True  # threshold data with PSD level
+        ThresholdData= False  # threshold data with PSD level
         FineTune=False
+        Deconvolve=False #Deconvolve activity to get smoothed (denoised) calcium trace
         NonNegative=True # should we constrain activity and shapes to be non-negative?
         FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
         Connected=True # should we constrain all spatial component to be connected?
@@ -273,7 +275,7 @@ def GetDefaultParams():
         
 
     params_dict=dict([['data_name',data_name],['SuperVoxelize',SuperVoxelize],['NonNegative',NonNegative],
-                      ['FinalNonNegative',FinalNonNegative],['mbs',mbs],['TargetAreaRatio',TargetAreaRatio],
+                      ['FinalNonNegative',FinalNonNegative],['mbs',mbs],['TargetAreaRatio',TargetAreaRatio],['Deconvolve',Deconvolve],
                      ['iters',iters],['iters0',iters0],['lam1_s',lam1_s],['MedianFilt',MedianFilt],['SigmaMask',SigmaMask],['FineTune',FineTune],
                      ['updateLambdaIntervals',updateLambdaIntervals],['updateRhoIntervals',updateRhoIntervals],['addComponentsIntervals',addComponentsIntervals],
                      ['estimateNoise',estimateNoise],['PositiveError',PositiveError],['sig',sig],['NumCent',NumCent],['SigmaBlur',SigmaBlur],
@@ -329,7 +331,7 @@ if __name__ == "__main__":
                 adaptBias=True
             MSE_array, shapes, activity = LocalNMF(
                 data, cent, params.sig,TargetAreaRatio=params.TargetAreaRatio,updateLambdaIntervals=params.updateLambdaIntervals,addComponentsIntervals=params.addComponentsIntervals,
-                WaterShed=params.WaterShed,SigmaMask=params.SigmaMask,PositiveError=params.PositiveError,NonNegative=params.NonNegative,
+                WaterShed=params.WaterShed,SigmaMask=params.SigmaMask,PositiveError=params.PositiveError,NonNegative=params.NonNegative,Deconvolve=params.Deconvolve,
                 FinalNonNegative=params.FinalNonNegative,MedianFilt=params.MedianFilt,verbose=True,lam1_s=params.lam1_s,
                 adaptBias=adaptBias,estimateNoise=params.estimateNoise,FineTune=params.FineTune,SigmaBlur=params.SigmaBlur,
                 Connected=params.Connected,SmoothBkg=params.SmoothBackground,FixSupport=params.FixSupport,bkg_per=params.bkg_per,iters0=params.iters0,iters=params.iters,mbs=params.mbs, ds=params.ds)

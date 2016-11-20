@@ -1,21 +1,26 @@
 def PlotAll(SaveNames,params):
     from numpy import  min, max, percentile,asarray,ceil,sqrt
     import numpy as np
+    import sys
+    from scipy.signal import welch
     from pylab import load
     import matplotlib.pyplot as plt
     import matplotlib.animation as animation
     from matplotlib.backends.backend_pdf import PdfPages
 #    from scipy.ndimage.measurements import label    
     from AuxilaryFunctions import GetRandColors, max_intensity,SuperVoxelize,GetData,PruneComponents,SplitComponents,ThresholdShapes,MergeComponents,ThresholdData
-    from BlockLocalNMF_AuxilaryFunctions import HALS4activity
+#    from BlockLocalNMF_AuxilaryFunctions import HALS4activity
     from mpl_toolkits.axes_grid1 import make_axes_locatable
-    import sys
-    sys.path.append('Constrained_NMF/ca_source_extraction/')
-    from Deconvolution import update_temporal_components,CNMFSetParms
+    sys.path.append('OASIS/')
+    from functions import deconvolve
+#
+#    sys.path.append('Constrained_NMF/ca_source_extraction/')
+#    from Deconvolution import update_temporal_components,CNMFSetParms
 
     ## plotting params 
     # what to plot 
     plot_activities=True
+    plot_activities_PSD=False
     plot_shapes_projections=True
     plot_shapes_slices=False
     plot_activityCorrs=False
@@ -142,14 +147,19 @@ def PlotAll(SaveNames,params):
     activity_NonNegative[activity_NonNegative<0]=0
     if FineTune==True:
 #        activity=HALS4activity(data.reshape((np.shape(data)[0],-1)), shapes.reshape((len(shapes),-1)), activity,params.NonNegative,lam1_t=0,lam2_t=0,iters=30)
-        options=CNMFSetParms(data, n_processes=1,p=1)
-        options['preprocess_params']['noise_range']=[0.1,0.5]
+#        options=CNMFSetParms(data, n_processes=1,p=1)
+#        options['preprocess_params']['noise_range']=[0.1,0.5]
 
 #        g_calcium=(1-1/30)*np.ones((len(activity),1)) #Jake's Guess - add g=g_calcium to update_temporal_components inputs to fix AR constants
-        if params.Background_num<=1: #the constrained foopsi code does not work with more than one background component
-            activity,background_activity,S,bl,c1,sn,g,junk = update_temporal_components(data.reshape((len(data),-1)).transpose(), shapes.reshape((len(shapes),-1)).transpose(), background_shapes.reshape((len(background_shapes),-1)).transpose(), activity,background_activity,**options['temporal_params'])
+#        if params.Background_num<=1: #the constrained foopsi code does not work with more than one background component
+        for ll in range(L):
+            activity[ll], spikes, baseline, g, lam = deconvolve(activity_NonNegative[ll], penalty=0)
+#            activity,background_activity,S,bl,c1,sn,g,junk = update_temporal_components(data.reshape((len(data),-1)).transpose(), shapes.reshape((len(shapes),-1)).transpose(), background_shapes.reshape((len(background_shapes),-1)).transpose(), activity,background_activity,**options['temporal_params'])
+        activity_noisy=np.copy(activity_NonNegative)
+        activity_NonNegative=activity
     
-
+    print str(L)+' shapes detected'
+    
     detrended_data= detrended_data - background_activity.T.dot(background_shapes.reshape((len(background_shapes), -1))).reshape(dims)        
 
     if Threshold==True:            
@@ -166,9 +176,9 @@ def PlotAll(SaveNames,params):
  
 #%% After loading loop - Normalize (colored) denoised data
     if plot_residual_projections or video_shapes or video_residual or video_slices or video_residual_2D:
-    #   denoised_data=denoised_data/np.max(denoised_data)
-        denoised_data=denoised_data/np.percentile(denoised_data,99.5)  #%% normalize denoised data range
-        denoised_data[denoised_data>1]=1           
+#       denoised_data=denoised_data/np.max(denoised_data)
+       denoised_data=denoised_data/np.percentile(denoised_data[denoised_data>0],99.5)  #%% normalize denoised data range
+       denoised_data[denoised_data>1]=1           
     
     #    plt.close('all')
         
@@ -198,7 +208,8 @@ def PlotAll(SaveNames,params):
             ax = plt.subplot(a,b,index+1)
 #            dt=1/30 # 30 Hz sample rate
             time=range(len(activity[ii]))
-            plt.plot(time,activity[ii],linewidth=3)
+            plt.plot(time,activity_noisy[ii],linewidth=0.5,c='r')
+            plt.plot(time,activity[ii],linewidth=3,c='b')
             plt.setp(ax, xticks=[],yticks=[0])
             # component number
             ax.text(0.02, 0.8, str(ii),
@@ -214,7 +225,41 @@ def PlotAll(SaveNames,params):
         pp.close()
         if close_figs:
             plt.close('all')
-        
+            
+    #%% Plot activities` PSDs
+    index=0 #component display index
+    sz=np.min([ComponentsInFig,L+adaptBias])
+    a=ceil(sqrt(sz))  
+    b=ceil(sz/a)  
+    
+    if plot_activities_PSD:
+        pp = PdfPages(Results_folder + 'ActivityPSDs'+resultsName+'.pdf')        
+        for ii in range(L+adaptBias):
+            if index==0:
+#                fig0=plt.figure(figsize=(dims[1] , dims[2]))
+                 fig0=plt.figure(figsize=(11,18))
+            ax = plt.subplot(a,b,index+1)
+            ff, psd_activity = welch(activity[ii], nperseg=round(len(activity[ii]) / 64))
+            plt.plot(ff,psd_activity,linewidth=3)
+            plt.setp(ax, xticks=[],yticks=[0])
+            # component number
+            ax.text(0.02, 0.8, str(ii),
+                verticalalignment='bottom', horizontalalignment='left',
+                transform=ax.transAxes,
+                color='black',weight='bold', fontsize=13)
+            index+=1   
+            if ((ii%ComponentsInFig)==(ComponentsInFig-1)) or ii==(L+adaptBias-1):                 
+                index=0
+                if save_plot==True:
+                    plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+                    pp.savefig(fig0)    
+        pp.close()
+        if close_figs:
+            plt.close('all')
+            
+
+            
+
     #%%  2D shapes
     index=0 #component display index
     sz=np.min([ComponentsInFig,L+adaptBias])

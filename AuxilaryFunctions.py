@@ -13,7 +13,7 @@ def GetFileName(params_dict,rep):
     if params_dict['TargetAreaRatio']!=[]: params_Name+='_Area'+str(params_dict['TargetAreaRatio'][0])+'_'+str(params_dict['TargetAreaRatio'][1])
     if params_dict['Background_num']>0: params_Name+='_Bkg'+str(params_dict['Background_num'])
     if params_dict['Connected']: params_Name+='_Connected'
-    if params_dict['ThresholdData']: params_Name+='_ThresholdData'
+    if params_dict['Deconvolve']: params_Name+='_Deconvolve'
     
     resultsName='NMF_results_'+ params_dict['data_name'] + '_Rep' + str(rep+1) +'of'+ str(params_dict['repeats']) +'_'+params_Name
     return resultsName
@@ -128,6 +128,14 @@ def GetData(data_name):
         data=temp["quietBlock"]
         data=np.asarray(data,dtype='float')  
         data=data[:,150:350,150:350] #take only a small patch
+#        ds=3  #downscale time by this factor
+#        data=data[:int(len(data) / ds) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
+        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+    elif data_name=='BaylorAxonsJiakun2':           
+        temp=h5py.File(DataFolder + 'BaylorV1Axons/11273_2_1(1).mat')
+        data=temp["X"]
+        data=np.asarray(data,dtype='float')  
+        data=data[:,200:450,200:450] #take only a small patch
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
     elif data_name=='BaylorAxonsJiakun1':           
         temp=h5py.File(DataFolder + 'BaylorV1Axons/11273_2_1(3).mat')
