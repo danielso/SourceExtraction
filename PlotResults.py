@@ -44,7 +44,7 @@ def PlotAll(SaveNames,params):
     IncludeBackground=False #should we include the background as an extracted component?
     
     # how to plot
-    detrend=False #should we detrend the data (remove background component)?
+    detrend=True #should we detrend the data (remove background component)?
     scale=2 #scale colormap to enhance colors
     satuartion_percentile=96 #saturate colormap ont this percentile, when ma=percentile is used
     dpi=200 #for videos
@@ -137,7 +137,7 @@ def PlotAll(SaveNames,params):
         shapes,activity,L,all_local_max=SplitComponents(shapes,activity,adaptBias)   
     
     if Merge==True:
-        shapes,activity,L=MergeComponents(shapes,activity,L,threshold=0.9,sig=10)
+        shapes,activity,L=MergeComponents(shapes,activity,L,threshold=0.7,sig=10)
         
     if Prune==True:
 #           deleted_indices=[5,9,11,14,15,17,24]+range(25,36)

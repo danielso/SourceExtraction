@@ -6,10 +6,10 @@ def GetDefaultParams():
     # choose dataset name (function GetData will use this to fetch the correct dataset)
     data_name_set=['Hillman','HillmanSmall','Sophie2D','Sophie3D','SophieVoltage3D','Sophie3DSmall',
     'SaraSmall','Sara19DEC2015_w1t1','PhilConfocal','PhilMFM','PhilConfocal2','BaylorAxonsSmall',
-    'BaylorAxons','BaylorAxonsQuiet','BaylorAxonsActive','BaylorAxonsJiakun1','BaylorAxonsJiakun2']
-    data_name=data_name_set[1]
+    'BaylorAxons','BaylorAxonsQuiet','BaylorAxonsActive','BaylorAxonsJiakun1','BaylorAxonsJiakun2','Ja_Ni1']
+    data_name=data_name_set[-1]
     
-    # "default" parameters - for additional information see "LocalNMF" in BlockLocalNMF
+    # "default" parameters - for additional information see "LocalNMF" function in BlockLocalNMF
     
     NumCent=0 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
     mbs=[1] # temporal downsampling of data in intial phase of NMF
@@ -25,7 +25,8 @@ def GetDefaultParams():
     Background_num=1 #number of background components - one of which at every repetion
     bkg_per=0.2 # intialize of background shape at this percentile (over time) of video
     sig=(500,500,500) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
-    SigmaBlur=[] # Spatial de-bluring with Gaussian Kernel of this width. 
+    SigmaMask=[]    # if not [], then update masks so that they are SigmaMasks around non-zero support of shapes
+    
     
     NonNegative=True # should we constrain activity and shapes to be non-negative?
     FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
@@ -33,15 +34,15 @@ def GetDefaultParams():
     WaterShed=False # should we constrain all spatial component to have only one watershed component?
     MedianFilt=False # should we perfrom median filtering of shape?
     FineTune=True # Should use the full data at the main iterations (to fine tune shapes)? If not then just extract the activity and not the shapes from the full data
-    ThresholdData= False  # threshold data with PSD level
     Deconvolve=False #Deconvolve activity to get smoothed (denoised) calcium trace
     
-    # experimental stuff - don't use for now
+    # obsolete experimental stuff - don't use these for now
+    ThresholdData= False  # threshold data with PSD level
     estimateNoise=False # should we tune sparsity and number of neurons to reach estimated noise level?
     PositiveError=False # should we tune sparsity and number of neurons to have only positive residual error?
     FixSupport=False # should we fix non-zero support at main NMF iterations?
     SmoothBackground=False # Should we cut out out peaks from background component?
-    SigmaMask=[]    # if not [], then update masks so that they are SigmaMasks around non-zero support of shapes
+    SigmaBlur=[] # Spatial de-bluring with Gaussian Kernel of this width. 
     
     SuperVoxelize=False # should we supervoxelize data (does not work now)
 
@@ -269,7 +270,28 @@ def GetDefaultParams():
         WaterShed=False # should we constrain all spatial component to have only one watershed component?        
         SigmaMask=3  
         
-       
+    elif data_name=='Ja_Ni1' :
+        NumCent=30 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+        mbs=[100] # temporal downsampling of data in intial phase of NMF
+        ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
+        TargetAreaRatio=[0.01,0.4] # target sparsity range for spatial components
+        repeats=1 # how many repeations to run NMF algorithm
+        iters0=[1] # number of intial NMF iterations, in which we downsample data and add components
+        iters=100 # number of main NMF iterations, in which we fine tune the components on the full data
+        lam1_s=10# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
+        updateLambdaIntervals=2 # update sparsity parameter every updateLambdaIntervals iterations
+        addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
+        updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
+        Background_num=1 #number of background components - one of which at every repetion
+        bkg_per=0.05 # intialize of background shape at this percentile (over time) of video
+        sig=(20,20) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
+        
+        FineTune=False
+        NonNegative=True # should we constrain activity and shapes to be non-negative?
+        FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
+        Connected=True # should we constrain all spatial component to be connected?
+        WaterShed=False # should we constrain all spatial component to have only one watershed component?        
+        SigmaMask=5  
         
         
         
@@ -304,31 +326,32 @@ if __name__ == "__main__":
     
     plt.close('all')
     
-    plot_all=True
-    do_NMF=True
+    plot_all=True #Plot final results (see end of this file)
+    do_NMF=True # Do CNMF on data
         
-    params,params_dict=GetDefaultParams()
+    params,params_dict=GetDefaultParams() # get default parameters for dataset
     
-    data=GetData(params.data_name)
+    data=GetData(params.data_name) #get data 
     
-    if params.ThresholdData:
+    if params.ThresholdData:  #obsolete
         data=ThresholdData(data)
         
-    if params.SuperVoxelize==True:
-        data=SuperVoxelize(data)        
+    if params.SuperVoxelize==True: #obsolete 
+        data=SuperVoxelize(data)  
             
     if do_NMF==True:         
-        for rep in range(params.repeats):  
+        for rep in range(params.repeats):  #perform several iterations of NMF over data, each time extracting more components
             
-            if params.NumCent>0:
+            if params.NumCent>0: #extract intialization centers using group lasso, if needed
                 cent=GetCentersData(data,params.data_name,params.NumCent,rep)
-            else:
+            else: #no intialization case - neuron are added one by one during initial downsampled iterations
                 cent=np.reshape([],(0,data.ndim-1)) 
                 
-            if rep>=params.Background_num:
+            if rep>=params.Background_num: # no background component case
                 adaptBias=False
-            else:
+            else: # have a background component in this repetition
                 adaptBias=True
+            #main CNMF function
             MSE_array, shapes, activity = LocalNMF(
                 data, cent, params.sig,TargetAreaRatio=params.TargetAreaRatio,updateLambdaIntervals=params.updateLambdaIntervals,addComponentsIntervals=params.addComponentsIntervals,
                 WaterShed=params.WaterShed,SigmaMask=params.SigmaMask,PositiveError=params.PositiveError,NonNegative=params.NonNegative,Deconvolve=params.Deconvolve,
@@ -336,6 +359,7 @@ if __name__ == "__main__":
                 adaptBias=adaptBias,estimateNoise=params.estimateNoise,FineTune=params.FineTune,SigmaBlur=params.SigmaBlur,
                 Connected=params.Connected,SmoothBkg=params.SmoothBackground,FixSupport=params.FixSupport,bkg_per=params.bkg_per,iters0=params.iters0,iters=params.iters,mbs=params.mbs, ds=params.ds)
             
+            # save results to file
             L=len(shapes)
             print str(L)+' components extracted'
             if L<=adaptBias:
@@ -346,9 +370,9 @@ if __name__ == "__main__":
             results=dict([['MSE_array',MSE_array], ['shapes',shapes],['activity',activity],['cent',cent],['params',params_dict]])
             cPickle.dump(results, f, protocol=cPickle.HIGHEST_PROTOCOL)
             f.close()
-#            print 'rep #',str(rep+1), ' finished'  
 
-            data=data- activity.T.dot(shapes.reshape(len(shapes), -1)).reshape(np.shape(data)) #subtract this iteration components from data        
+            #subtract this iteration components from data       
+            data=data- activity.T.dot(shapes.reshape(len(shapes), -1)).reshape(np.shape(data))  
         
     #%% PLotting
     if plot_all==True:

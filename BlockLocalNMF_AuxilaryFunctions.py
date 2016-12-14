@@ -15,14 +15,59 @@ from scipy.linalg import eigh
 
 
 def gaussian_filter_spatial(X, Sigma,spatial_dims):
+    """
+    Do Gaussian filtering (bluring) of spatial dimensions of data 
+    Input
+    ----------
+    X : array, shape (T, X, Y[, Z])
+        data
+    Sigma : float 
+        width of Gaussian we do filtering with
+    spatial_dims: list
+        the dimensions on which we do filtering
+                
+    Output
+    ----------
+    X : array, shape (T, X, Y[, Z])
+        filtered data
+    
+    """
     X=X.reshape((-1,) + spatial_dims) 
     for dd in range(1,len(spatial_dims)+1):
         X=gaussian_filter1d(X, Sigma, axis=dd) 
     X=X.reshape((len(X),-1))   
     return X
     
-def HALS4activity(data, S, activity,NonNegative,lam1_t,lam2_t,dims,Sigma,iters=1):
+def HALS4activity(data, S, activity,NonNegative=True,lam1_t=0,lam2_t=0,dims=0,Sigma=[],iters=1):
+    """
+    HALS iterations to extract activity (temporal components) from data
     
+    Input
+    ----------
+    data : array, shape (T, XxY(xZ))
+        data
+    S : array, shape (L, XxYx(xZ)) 
+        spatial components
+    activity: array, shape (L,T)
+        temporal components
+    NonNegative: Boolean
+        Should we activity be non-negative?
+    lam_t : float
+        L_1 regularization constant for sparsity of activity
+    lam2_t : float
+        L_2 regularization constant for sparsity of activity
+    Sigma : float or empty array
+        if non-empty, we de-blur spatial component with Gausian of width Sigma    
+    iters: integer
+        how many HALS iteration to do?
+        
+    Output
+    ----------
+    activity: array, shape (L,T)
+        extracted temporal components
+    
+    """
+# obsolete (might be faster in some cases?):   
 #        ind=np.squeeze(np.sum(S,0)>0) # find spatial support of components
 #        
 #        if np.sum(ind)<0.1*np.size(ind):
@@ -33,7 +78,7 @@ def HALS4activity(data, S, activity,NonNegative,lam1_t,lam2_t,dims,Sigma,iters=1
 #            B = S_comp.dot(S_comp.T)
 #        else:
     
-    if Sigma!=[]:
+    if Sigma!=[]: #not sure if this is the best way to do this
         GS=gaussian_filter_spatial(S, Sigma,dims[1:])  
     else:
         GS=S
@@ -49,7 +94,37 @@ def HALS4activity(data, S, activity,NonNegative,lam1_t,lam2_t,dims,Sigma,iters=1
     return activity
     
 #    @profile
-def HALS4shape(data, S, activity,mask,lam1_s,lam2_s,adaptBias,iters=1):    
+def HALS4shape(data, S, activity,mask,lam1_s=0,lam2_s=0,adaptBias=0,iters=1): 
+    """
+    HALS iterations to extract spatial components from data
+    
+    Input
+    ----------
+    data : array, shape (T, XxY(xZ))
+        data
+    S : array, shape (L, XxYx(xZ)) 
+        spatial components
+    activity: array, shape (L,T)
+        temporal components
+    mask: boolean area (L, XxYx(xZ)) 
+        Non-zero value define the support of the shape in the data
+
+    lam1_s : float
+        L_1 regularization constant for sparsity of shapes
+    lam2_s : float
+        L_2 regularization constant for sparsity of shapes
+    adaptBias : Boolean
+        is last component the backgorund component?    
+    iters: integer
+        how many HALS iteration to do?    
+        
+    Output
+    ----------
+    S: array, shape (L, XxYx(xZ)) 
+        extracted spatial components
+    
+    """    
+# obsolete (might be faster in some cases?):   
 #        ind=np.squeeze(np.sum(activity,0)>0) # find spatial support of components
 #        
 #        if np.sum(ind)<0.1*np.size(ind):
@@ -69,13 +144,43 @@ def HALS4shape(data, S, activity,mask,lam1_s,lam2_s,adaptBias,iters=1):
             else:
                 S[ll, mask[ll]] += np.nan_to_num((C[ll, mask[ll]]- np.dot(D[ll], S[:, mask[ll]])-lam1_s[ll,mask[ll]]-lam2_s*S[ll,mask[ll]])/ D[ll, ll])
 
-#                if NonNegative:
+#           NonNegative shapes:
             S[ll][S[ll] < 0] = 0 #add mask here
-    # normalize/delete components
 
     return S 
     
 def FISTA4shape(data, S, activity,mask,lam1_s,adaptBias,Sigma,dims,iters=30):    
+    """
+    Deblur shapes using FISTA
+    
+    Input
+    ----------
+    data : array, shape (T, XxY(xZ))
+        data
+    S : array, shape (L, XxYx(xZ)) 
+        spatial components
+    activity: array, shape (L,T)
+        temporal components
+    mask: boolean area (L, XxYx(xZ)) 
+        Non-zero value define the support of the shape in the data
+
+    lam1_s : float
+        L_1 regularization constant for sparsity of shapes
+    adaptBias : Boolean
+        is last component the backgorund component?        
+    Sigma : float or empty array
+        if non-empty, we de-blur spatial component with Gausian of width Sigma    
+    dims: list
+        original data dimensions
+    iters: integer
+        how many FISTA iteration to do?    
+        
+    Output
+    ----------
+    S: array, shape (L, XxYx(xZ)) 
+        extracted spatial components
+    
+    """   
     
     C = activity.dot(data)   
     spatial_dims=dims[1:]
@@ -87,6 +192,8 @@ def FISTA4shape(data, S, activity,mask,lam1_s,adaptBias,Sigma,dims,iters=30):
     
     t_next = 1
     Lip=2*eigh(D, eigvals_only=True, eigvals=(L-1,L-1)) # lipshitc constant (since Gaussian kerenel that sums to 1)
+    
+    #Main FISTA iterations
     for kk in range(iters):
         S_prev = S + 0
         t = t_next + 0         
@@ -96,7 +203,8 @@ def FISTA4shape(data, S, activity,mask,lam1_s,adaptBias,Sigma,dims,iters=30):
         S = SS - (2 / Lip) * (np.dot(D,GS)  - C)- lam1_s/Lip        
         S[S<0]=0
         SS = S + (t - 1) / t_next * (S - S_prev)
-        
+
+# obsolete code:        
 #        for ll in range(L-adaptBias):
 #            if ll < L:
 #                S[ll,mask[ll]] = SS[ll,mask[ll]] - (2 / Lip) * (np.dot(D[ll],GS[:,mask[ll]])  - C[ll,mask[ll]])
@@ -114,6 +222,46 @@ def FISTA4shape(data, S, activity,mask,lam1_s,adaptBias,Sigma,dims,iters=30):
     return S
     
 def RenormalizeDeleteSort( S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt):
+    """
+    Renormalize scale of components, delete zero components, and Sort 
+    
+    Input
+    ----------
+    S : array, shape (L, XxYx(xZ)) 
+        spatial components
+    activity: array, shape (L,T)
+        temporal components
+    mask: boolean area (L, XxYx(xZ)) 
+        Non-zero value define the support of the shape in the data
+    centers: array, shape (L, D)
+        L centers of suspected neurons where D is spatial dimension (2 or 3)        
+    boxes: array, shape (L, D, 2)
+        edges of the boxes in which each neuronal shapes lie (empty if no components found)
+    ES: struct
+        sparsity parameters for each components
+    adaptBias : Boolean
+        is last component the backgorund component?        
+    MedianFilt: Boolean
+         do median filter of spatial components?
+         
+    Output
+    ----------
+    S: array, shape (L, XxYx(xZ)) 
+        spatial components
+    activity: array, shape (L,T)
+        temporal components
+    mask: boolean area (L, XxYx(xZ)) 
+        Non-zero value define the support of the shape in the data
+    centers: array, shape (L, D)
+        L centers of suspected neurons where D is spatial dimension (2 or 3)        
+    boxes: array, shape (L, D, 2)
+        edges of the boxes in which each neuronal shapes lie (empty if no components found)
+    ES: struct
+        sparsity parameters for each components
+    L: integer
+        number of components without background
+    """   
+    
     L=len(S)-adaptBias
     deleted_indices=[]
     
@@ -159,6 +307,48 @@ def RenormalizeDeleteSort( S, activity, mask,centers,boxes,ES,adaptBias,MedianFi
     return  S, activity, mask,centers,boxes,ES,L
 
 def addComponent(new_cent,current_data,data_dim,box_size,S, activity, mask,centers,boxes,adaptBias):
+    """
+    Add new component
+    
+    Input
+    ----------
+    New_cent: integer
+        index of the center of new component to add
+    Current_data: shape (T, XxYx(xZ)) 
+        data to extract component from
+    data_dim: list
+        dimensions of data
+    box_size: array, shape (D,2)
+        dimensions of initial mask
+    S : array, shape (L, XxYx(xZ)) 
+        spatial components
+    activity: array, shape (L,T)
+        temporal components
+    mask: boolean area (L, XxYx(xZ)) 
+        Non-zero value define the support of the shape in the data
+    centers: array, shape (L, D)
+        L centers of suspected neurons where D is spatial dimension (2 or 3)        
+    boxes: array, shape (L, D, 2)
+        edges of the boxes in which each neuronal shapes lie (empty if no components found)
+    adaptBias : Boolean
+        is last component the backgorund component?        
+
+         
+    Output
+    ----------
+    S: array, shape (L, XxYx(xZ)) 
+        spatial components
+    activity: array, shape (L,T)
+        temporal components
+    mask: boolean area (L, XxYx(xZ)) 
+        Non-zero value define the support of the shape in the data
+    centers: array, shape (L, D)
+        L centers of suspected neurons where D is spatial dimension (2 or 3)        
+    boxes: array, shape (L, D, 2)
+        edges of the boxes in which each neuronal shapes lie (empty if no components found)
+    L: integer
+        number of components without background
+    """   
     new_activity=current_data[:,new_cent]-np.dot(activity.T,S[:,new_cent])
     #       new_activity=np.random.randn(data_dim[0]) # for testing purposes only
     activity=np.insert(activity,0,new_activity,axis=0)
@@ -206,6 +396,8 @@ def RegionCut(X, box):
     
 def DownScale(data,mb,ds):
     """
+        Downscale data
+        
         Parameters
         ----------
         data : array, shape (T, X, Y[, Z])
@@ -250,6 +442,23 @@ def DownScale(data,mb,ds):
     return data0,dims0
     
 def LargestConnectedComponent(shapes,dims,skipBias): 
+    """
+    Keep only largest connect component in each spatial component
+    
+    Parameters
+    ----------
+    shapes: array, shape (L, XxYx(xZ)) 
+        spatial components
+    dims : list
+         data dimensions
+    skipBias: Boolean
+        should we skip bias comonent
+    Returns
+    -------
+    shapes: array, shape (L, XxYx(xZ)) 
+        processed spatial components
+
+    """
     L=len(shapes)-skipBias     
     shapes=shapes.reshape((-1,) + dims[1:])    
     structure=np.ones(tuple(3*np.ones((np.ndim(shapes)-1,1))))
@@ -287,6 +496,23 @@ def LargestConnectedComponent(shapes,dims,skipBias):
 #    return shapes
     
 def LargestWatershedRegion(shapes,dims,skipBias): 
+    """
+    Keep only largest watershed component in each spatial component
+    
+    Parameters
+    ----------
+    shapes: array, shape (L, XxYx(xZ)) 
+        spatial components
+    dims : list
+         data dimensions
+    skipBias: Boolean
+        should we skip bias comonent
+    Returns
+    -------
+    shapes: array, shape (L, XxYx(xZ)) 
+        processed spatial components
+
+    """
     L=len(shapes)-skipBias     
     shapes=shapes.reshape((-1,) + dims[1:]) 
     D=len(dims)
@@ -317,6 +543,25 @@ def LargestWatershedRegion(shapes,dims,skipBias):
     
     
 def SmoothBackground(shapes,dims,adaptBias,sig_filt): 
+    """
+    Smooth Background component
+    
+    Parameters
+    ----------
+    shapes: array, shape (L, XxYx(xZ)) 
+        spatial components
+    dims : list
+         data dimensions
+    adaptBias: Boolean
+        function only works if the is True
+    sig_filt: float
+        which scale to filter background with
+    Returns
+    -------
+    shapes: array, shape (L, XxYx(xZ)) 
+        processed spatial components
+
+    """
     num_peaks=2
     thresh=0.6
     if adaptBias==True:
@@ -334,16 +579,16 @@ def SmoothBackground(shapes,dims,adaptBias,sig_filt):
             shapes[-1]=np.ndarray.flatten(temp2)
     return shapes
     
-# Estimate noise level for a time series
 def GetSnPSD(Y):
+    # Estimate noise level for a time series
     L = len(Y)
     ff, psd_Y = welch(Y, nperseg=round(L / 8))
     sn = np.sqrt(np.mean(psd_Y[ff > .3] / 2))
     return sn
 
 
-# Estimate noise level for an array of time series
 def GetSnPSDArray(Y,f_low=10,f_high=0.6):
+    # Estimate noise level for an array of time series
     print "Calculating noise level..."
     N = len(Y)
     fmin=np.round(f_high*N/2)
@@ -367,6 +612,7 @@ def GetSnPSDArray(Y,f_low=10,f_high=0.6):
     return sn,sn_std
 
 class ExponentialSearch:
+    # Class for storing and update sparsity parameters
     def __init__(self,lam,rho=1.5):
         # lam - an array of parameter values
         self.lam=lam
@@ -405,7 +651,7 @@ class ExponentialSearch:
         
 def GrowMasks(shapes,mask,boxes,dims,skipBias,sigma): 
     ''' Grow/shrink masks according to support of non-zero shapes
-        Sigma - scalar that determines the size of the boundary around each shape  
+        sigma - scalar that determines the size of the boundary around each shape  
     ''' 
     
     L=len(shapes)-skipBias     

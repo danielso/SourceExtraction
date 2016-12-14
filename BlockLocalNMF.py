@@ -95,18 +95,18 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         
     
     # Initialize Parameters
-    dims = data.shape
-    D = len(dims)
+    dims = data.shape # data dimensions
+    D = len(dims) #number of data dimensions
     R = 3 * asarray(sig)  # size of bounding box is 3 times size of neuron
-    L = len(centers)
+    L = len(centers) # number of components (not including background)
     inner_iterations=10 # number of iterations in inners loops
-    shapes = []
-    mask = []
-    boxes = zeros((L, D - 1, 2), dtype=int)
-    MSE_array = []
-    mb = mbs[0] if iters0[0] > 0 else 1
-    activity = zeros((L, dims[0] / mb))
-    lam1_s0=np.copy(lam1_s)
+    shapes = [] #array of spatial components
+    mask = [] # binary array, support of spatial components
+    boxes = zeros((L, D - 1, 2), dtype=int) #initial support of spatial components
+    MSE_array = [] #CNMF residual error
+    mb = mbs[0] if iters0[0] > 0 else 1 
+    activity = zeros((L, dims[0] / mb)) #array of temporal components
+    lam1_s0=np.copy(lam1_s) #intial spatial sparsity (l1) parameters
     if TargetAreaRatio!=[]:
         if TargetAreaRatio[0]>TargetAreaRatio[1]:            
             print 'WARNING -  TargetAreaRatio[0]>TargetAreaRatio[1] !!!'
@@ -116,28 +116,28 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         
 ### Initialize shapes, activity, and residual ###        
     
-    data0,dims0=DownScale(data,mb,ds)
+    data0,dims0=DownScale(data,mb,ds) #downscaled data and dimensions
     if type(ds)==int:
         ds=ds*np.ones(D-1)
 
-    if D == 4:
+    if D == 4: #downscale activity
         activity = data0[:, map(int, centers[:, 0] / ds[0]), map(int, centers[:, 1] / ds[1]),
                          map(int, centers[:, 2] / ds[2])].T
     else:
         activity = data0[:, map(int, centers[:, 0] / ds[0]), map(int, centers[:, 1] / ds[1])].T
         
-    data0 = data0.reshape(dims0[0], -1)
-    Energy0=np.sum(data0**2,axis=0) #data energy per pixel
+    data0 = data0.reshape(dims0[0], -1) #reshape data0 to more convient timexspace form
+    Energy0=np.sum(data0**2,axis=0) #data0 energy per pixel
     data0sum=np.sum(data0,axis=0) # for sign check later
 
-    data = data.astype('float').reshape(dims[0], -1)
+    data = data.astype('float').reshape(dims[0], -1) #reshape data to more convient timexspace form
     datasum=np.sum(data,axis=0)# for sign check later
     
     # float is faster than float32, presumable float32 gets converted later on
     # to float again and again
-    Energy=np.sum((data**2),axis=0)
+    Energy=np.sum((data**2),axis=0) #data energy per pixel
     
-    
+    # extract shapes and activity from given centers
     for ll in range(L):
         boxes[ll] = GetBox(centers[ll] / ds, R / ds, dims0[1:])
         temp = zeros(dims0[1:])
@@ -149,7 +149,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         temp.shape = (1,) + dims0[1:]
         temp = RegionCut(temp, boxes[ll])
         shapes.append(temp[0])
-    S = zeros((L + adaptBias, prod(dims0[1:])))
+    S = zeros((L + adaptBias, prod(dims0[1:]))) #shape component
     for ll in range(L):
         S[ll] = RegionAdd(
             zeros((1,) + dims0[1:]), shapes[ll].reshape(1, -1), boxes[ll]).ravel()
@@ -158,9 +158,8 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         S[-1] = percentile(data0, bkg_per, 0)
         activity = np.r_[activity, ones((1, dims0[0]))]
     
-    lam1_s=lam1_s0*np.ones_like(S)*mbs[0]
-#    if adaptBias:
-#        lam1_s[L]=0.1*lam1_s[L]
+    lam1_s=lam1_s0*np.ones_like(S)*mbs[0] #intialize sparsity parameters
+
 
 ### Get shape estimates on subset of data ###
     if iters0[0] > 0:
@@ -171,20 +170,16 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                 sn_target=np.zeros(prod(dims0[1:]))
                 sn_std=sn_target
             MSE_target = np.mean(sn_target**2)
-            ES=ExponentialSearch(lam1_s)
+            ES=ExponentialSearch(lam1_s) #object to update sparsity parameters
             lam1_s=ES.lam
             for kk in range(iters0[it]):
-                if kk%updateLambdaIntervals==0:
-                    # adjust lambda value 
-#                    sn_square=(Energy0-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0))/dims0[0] # efficient way to calcuate MSE per pixel
-#                    sn=np.sqrt(np.nan_to_num(sn_square*(sn_square>0))) #not sure why, but I get numerical issues here without these precusions 
-                    
+                # update sparisty parameters     
+                if kk%updateLambdaIntervals==0:                 
                     sn=np.sqrt(Energy0-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0))/dims0[0] # efficient way to calcuate MSE per pixel
         
-#                    sn=np.sqrt(np.mean((residual**2),axis=0))
                     delta_sn=sn-sn_target # noise margin
                     signcheck=(data0sum-np.dot(np.sum(activity.T,axis=0),S))<0
-                    if PositiveError:
+                    if PositiveError: #obsolete
                         delta_sn[signcheck]=-float("inf") # residual should not have negative pixels, so we increase lambda for these pixels
                     
                     if len(S)==0:
@@ -206,31 +201,30 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         
                         ES.update(cond_decrease,cond_increase)    
                         lam1_s=ES.lam
+                        
+                    #Print residual error and additional information
                     MSE = np.mean(sn**2)
-#                    MSE = np.mean((data0-np.dot(activity.T,S))**2)
-                    if verbose and L>0:
-                        
-#                        Norms=(np.sum(S*lam1_s)+lam1_t*np.sum(activity)+0.5*lam2_s*np.sum(S**2)+0.5*lam2_t*np.sum(activity**2))/ data.size
-#                        Objective=MSE+Norms                        
-                        
+                    
+                    if verbose and L>0:                       
                         print(' MSE = {0:.6f}, Target MSE={1:.6f},Sparsity={2:.4f},lam1_s={3:.6f}'.format(MSE,MSE_target,np.mean(spars[:L]),np.mean(lam1_s)))
-
+                    
+                    #add a new component
                     if (kk%addComponentsIntervals==0) and (kk!=iters0[it]-1):
+                        
                         delta_sn[signcheck]=-float("inf") # residual should not have negative pixels
                         new_cent=np.argmax(delta_sn) #should I smooth the data a bit first?
                         MSE_std=np.mean(sn_std**2)
                         checkNoZero= not((0 in np.sum(activity,axis=1)) and (0 in np.sum(S,axis=1)))
                         if ((MSE-MSE_target>2*MSE_std) and checkNoZero and (delta_sn[new_cent]>sn_std[new_cent])):                            
                             S, activity, mask,centers,boxes,L=addComponent(new_cent,data0,dims0,R/ds,S, activity, mask,centers,boxes,adaptBias)
-#                            if (L+adaptBias)>1:                            
-#                                new_lam=np.take(lam1_s,0,axis=0).reshape(1,-1)
-#                            else:
                             new_lam=lam1_s0*np.ones_like(data0[0,:]).reshape(1,-1)
                             lam1_s=np.insert(lam1_s,0,values=new_lam,axis=0)
                             ES=ExponentialSearch(lam1_s) #we need to restart exponential search each time we add a component
+                            
+                #apply additional constraints/processing                            
                 if SigmaBlur==[]:
                     S = HALS4shape(data0, S, activity,mask,lam1_s,lam2_s,adaptBias,inner_iterations)
-                else:
+                else: #obsolete
                     S=FISTA4shape(data0, S, activity,mask,lam1_s,adaptBias,SigmaBlur,dims0)
                 
                 if Connected==True:
@@ -246,7 +240,8 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                     S=SmoothBackground(S,dims0,adaptBias,tuple(np.array(sig)/np.array(ds)))
                 
                 print 'Subsampled iteration',kk,'it=',it,'L=',L
-                
+            
+            # use next (smaller) value for temporal downscaling
             if it < len(iters0) - 1:
                 mb = mbs[it + 1]
                 data0 = data[:len(data) / mb * mb].reshape(-1, mb, prod(dims[1:])).mean(1)
@@ -264,11 +259,11 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                 S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)
                 lam1_s=ES.lam
 
-    ### Back to full data ##
+    ### Stop adding components ###
         if L==0: #if no non-background components found, return empty arrays
             return [], [], [], []
         
-        if FineTune:
+        if FineTune: ### Upscale Back to full data ##
             activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1)
             data0=data
             dims0=dims
@@ -292,10 +287,9 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                 temp[map(lambda a: slice(*a), boxes[ll])] = 1
                 mask[ll] = np.where(temp.ravel())[0]
             
-            if FixSupport:
+            if FixSupport: #obsolete
                 for ll in range(L):
                     lam1_s[ll,S[ll]==0]=float("inf")
-    #                lam1_s[ll,S[ll]>0]=0
                 
             
             ES=ExponentialSearch(lam1_s)
@@ -316,18 +310,12 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
   
     print 'starting main NMF loop'
     for kk in range(iters):
-        lam1_s=ES.lam
+        lam1_s=ES.lam #update sparsity parameters
         if SigmaBlur==[]:
             S = HALS4shape(data0, S, activity,mask,lam1_s,lam2_s,adaptBias,inner_iterations)
-        else:
+        else: #obsolete
             S = FISTA4shape(data0, S, activity,mask,lam1_s,adaptBias,SigmaBlur,dims0)
-#        lam1_s=0*ES.lam
-#        for ll in range (L):
-#                temp=S[ll,mask[ll]]
-#                temp2=temp[temp>0].ravel()
-#                if len(temp2)>8:
-#                    lam1_s[ll] = GetSnPSD(temp2)*0.5
-        
+        #apply additional constraints/processing 
         if Connected==True:            
             S=LargestConnectedComponent(S,dims0,adaptBias)
         if WaterShed==True:
@@ -340,29 +328,12 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
             for ll in range(L):
                 if np.sum(np.abs(activity[ll])>0)>30: #make sure there is enough signal before we try to deconvolve
                     activity[ll], _, _, _, _ = deconvolve(activity[ll], penalty=0)
-#       S=LargestConnectedComponent(S)   
+ 
         if SigmaMask!=[]:
             mask=GrowMasks(S,mask,boxes,dims0,adaptBias,SigmaMask)
         S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)
-
-        # Recenter
-        # if kk % 30 == 20:
-        #     for ll in range(L):
-        #         shp = shapes[ll].reshape(np.ravel(np.diff(boxes[ll])))
-        #         com = boxes[ll][:, 0] + round(center_of_mass(shp))
-        #         newbox = GetBox(com, R, dims[1:])
-        #         if any(newbox != boxes[ll]):
-        #             newshape = zeros(np.ravel(np.diff(newbox)))
-        #             lower = vstack([newbox[:, 0], boxes[ll][:, 0]]).max(0)
-        #             upper = vstack([newbox[:, 1], boxes[ll][:, 1]]).min(0)
-        #             newshape[lower[0] - newbox[0, 0]:upper[0] - newbox[0, 0],
-        #                      lower[1] - newbox[1, 0]:upper[1] - newbox[1, 0]] =
-        #                 shp[lower[0] - boxes[ll][0, 0]:upper[0] - boxes[ll][0, 0],
-        #                     lower[1] - boxes[ll][1, 0]:upper[1] - boxes[ll][1, 0]]
-        #             shapes[ll] = newshape.reshape(-1)
-        #             boxes[ll] = newbox
-
-        # Measure MSE
+        
+        # Measure MSE and update sparsity parameters
         print 'main iteration kk=',kk,'L=',L
         if (kk+1)%updateLambdaIntervals==0:            
             sn=np.sqrt((Energy-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0))/dims0[0])
@@ -370,7 +341,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
             MSE = np.mean(sn**2)
             
             signcheck=(datasum-np.dot(np.sum(activity.T,axis=0),S))<0
-            if PositiveError:
+            if PositiveError: #obsolete
                 delta_sn[signcheck]=-float("inf") # residual should not have negative pixels, so we increase lambda for these pixels
             
             if S==[]:
@@ -392,8 +363,6 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
             
             
             ES.update(cond_decrease,cond_increase)
-#            print spars
-#            print lam1_s[:,0]
             lam1_s=ES.lam
             if kk<iters/3: #restart exponential search unless enough iterations have passed
                 ES=ExponentialSearch(lam1_s)                
@@ -407,10 +376,9 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                             ES.rho=2-1/(ES.rho)
                             print 'rho=',ES.rho
                     ES=ExponentialSearch(lam1_s,rho=ES.rho)
-                    
+            
+            # prinst MSE and other information
             if verbose:             
-#                        Norms=(np.sum(S*lam1_s)+lam1_t*np.sum(activity)+0.5*lam2_s*np.sum(S**2)+0.5*lam2_t*np.sum(activity**2))/ data.size
-#                        Objective=MSE+Norms        
                 print(' MSE = {0:.6f}, Target MSE={1:.6f},Sparsity={2:.4f},lam1_s={3:.6f}'.format(MSE,MSE_target,np.mean(spars[:L]),np.mean(lam1_s)))
                 if kk == (iters - 1):
                     print('Maximum iteration limit reached')
@@ -418,17 +386,17 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
     
     # Some post-processing 
     S=S.reshape((-1,) + dims[1:])
-    S,activity,L=PruneComponents(S,activity,L)
+    S,activity,L=PruneComponents(S,activity,L) #prune "bad" components
     if len(S)>1:
-        S,activity,L=MergeComponents(S,activity,L,threshold=0.9,sig=10)    
+        S,activity,L=MergeComponents(S,activity,L,threshold=0.9,sig=10)    #merge very similar components
         if not FineTune:
-            activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1)
+            activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1) #extract activity from full data
         activity=HALS4activity(data, S.reshape((len(S),-1)), activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,iters=30)
     
     return asarray(MSE_array), S, activity
 
 
-# example
+# example to check code works
 
 
 #T = 1000

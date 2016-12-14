@@ -26,7 +26,7 @@ def GetRandColors(n):
     
     return np.array(colors)
     
-def max_intensity(x,axis):
+def max_intensity(x,axis): #get the pixel with maximum total intensity in a color volume
     intensity=np.sum(x,axis=-1)
     ind=np.argmax(intensity,axis=axis)
     tup=np.indices(ind.shape)
@@ -40,7 +40,6 @@ def max_intensity(x,axis):
             tup_ind+=(ind,)
     return x[tup_ind]
     
-#load mask
     
 def GetDataFolder():
     import os
@@ -149,11 +148,17 @@ def GetData(data_name):
         data=np.asarray(data,dtype='float')  
         data=data[:,150:350,150:350] #take only a small patch
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+    elif data_name=='Ja_Ni1':           
+        img= tff.TiffFile(DataFolder + 'NaJi_Dendrites\sparse_dendrites\Sparse-dendrite_Aaron.tif')
+        data=img.asarray()
+        data=np.transpose(data, [0,2,1]) 
+        data=data[:,100:400]
+        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
     else:
         print 'unknown dataset name!'
     return data
     
-def GetCentersData(data,data_name,NumCent,rep):
+def GetCentersData(data,data_name,NumCent,rep): #Get intialization centers using group lasso
     
     from numpy import  array,percentile    
     from BlockGroupLasso import gaussian_group_lasso, GetCenters
@@ -176,7 +181,7 @@ def GetCentersData(data,data_name,NumCent,rep):
             ds= 50 #downscale time for group lasso        
             NonNegative=True
     
-            downscaled_data=data[:int(len(data) / ds) * ds].reshape((-1, ds) + data.shape[1:]).max(1)
+            downscaled_data=data[:int(len(data) / ds) * ds].reshape((-1, ds) + data.shape[1:]).max(1) #for speed ups
             x = gaussian_group_lasso(downscaled_data, sig0, lam,NonNegative=NonNegative, TargetAreaRatio=TargetRange, verbose=True, adaptBias=False)
             pic_x = percentile(x, 95, axis=0)
 
@@ -219,14 +224,14 @@ def GetCentersData(data,data_name,NumCent,rep):
     return new_cent
     
     
-def ThresholdData(data):
+def ThresholdData(data): #obsolete
     from BlockLocalNMF_AuxilaryFunctions import GetSnPSDArray
     
     sn_target,sn_std= GetSnPSDArray(data)
     data[data<sn_target]=0
     return data
 
-def SuperVoxelize(data):
+def SuperVoxelize(data): #obsolete
 
     import scipy.io
     data=np.transpose(data,axes=[1,2,3,0])
@@ -259,6 +264,18 @@ from collections import defaultdict
 from scipy.ndimage.filters import gaussian_filter
 
 def MergeComponents(shapes,activity,L,threshold,sig):
+    # merge nearby components (with spatial components within sig of each other), and high (>threshold) spatial or temporal correlation
+    # Inputs:
+    # shapes - numpy array with all shape components - size (L,X,Y(,Z)) 
+    # activity - numpy array with all activity components - size (L,T)
+    # L - int, number of background components.
+    # threshold - float, cutoff for merging
+    # sig - float, cutoff of spatial proximity
+    # Outputs:  
+    # shapes - numpy array with all shape components - size (L,X,Y(,Z)) 
+    # activity - numpy array with all activity components - size (L,T)
+    # L - int, number of background components.
+   
     if len(shapes)==0:
        return shapes,activity,L
     dims_shape=shapes[0].shape
@@ -277,8 +294,13 @@ def MergeComponents(shapes,activity,L,threshold,sig):
     activity_cov=np.dot(activity[:L],activity[:L].T)
     activity_vars=np.diag(activity_cov).reshape(-1,1)
     activity_corr=activity_cov/np.sqrt(np.dot(activity_vars,activity_vars.T))
+    
+    shapes_array=shapes[:L].reshape(L,-1)
+    shapes_cov=np.dot(shapes_array,shapes_array.T)
+    shape_vars=np.diag(shapes_cov).reshape(-1,1)
+    shapes_corr=np.nan_to_num(shapes_cov/np.sqrt(np.dot(shape_vars,shape_vars.T)))
 
-    merge_ind=activity_corr>threshold
+    merge_ind=(activity_corr>threshold)|(shapes_corr>threshold)
     merge_ind[nearby_shapes==0]=0
     num,labels=connected_components(merge_ind)
     
@@ -305,6 +327,18 @@ def MergeComponents(shapes,activity,L,threshold,sig):
     return shapes,activity,L
     
 def PruneComponents(shapes,activity,L,TargetAreaRatio=[],deleted_indices=[]):
+    # Prune unecessary components 
+    # Inputs:
+    # shapes - numpy array with all shape components - size (L,X,Y(,Z)) 
+    # activity - numpy array with all activity components - size (L,T)
+    # L - int, number of background components.
+    # TargetAreaRatio - list with 2 numbers, tagrget sparsity range, outside we delete component
+    # deleted_indices - list, delete only specific components in this indice list
+    # Outputs:
+    # new_shapes- numpy array with new shape components - size (L,X,Y(,Z))
+    # new_activity- numpy array with new activity components - size (L,T)
+    # L - number of new components
+    # all_local_max - location of (unique) smoothed local maxima of all components
     
     if deleted_indices==[]:
         # If sparsity is too high or too low        
@@ -339,7 +373,7 @@ def PruneComponents(shapes,activity,L,TargetAreaRatio=[],deleted_indices=[]):
     return shapes,activity,L
 
 def SplitComponents(shapes,activity,NumBKG):
-    # split components accoring to watershed around peaks
+    # split components according to watershed around peaks
     # Inputs:
     # shapes - numpy array with all shape components - size (L,X,Y(,Z)) 
     # activity - numpy array with all activity components - size (L,T)
