@@ -7,7 +7,7 @@ def GetDefaultParams():
     data_name_set=['Hillman','HillmanSmall','Sophie2D','Sophie3D','SophieVoltage3D','Sophie3DSmall',
     'SaraSmall','Sara19DEC2015_w1t1','PhilConfocal','PhilMFM','PhilConfocal2','BaylorAxonsSmall',
     'BaylorAxons','BaylorAxonsQuiet','BaylorAxonsActive','BaylorAxonsJiakun1','BaylorAxonsJiakun2','Ja_Ni1']
-    data_name=data_name_set[-1]
+    data_name=data_name_set[-5]
     
     # "default" parameters - for additional information see "LocalNMF" function in BlockLocalNMF
     
