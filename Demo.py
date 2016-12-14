@@ -343,7 +343,8 @@ if __name__ == "__main__":
         for rep in range(params.repeats):  #perform several iterations of NMF over data, each time extracting more components
             
             if params.NumCent>0: #extract intialization centers using group lasso, if needed
-                cent=GetCentersData(data,params.data_name,params.NumCent,rep)
+                cent=GetCentersData(data,params.NumCent)
+#                cent=GetCentersData(data,params.NumCent,params.data_name,rep) #obsolete version
             else: #no intialization case - neuron are added one by one during initial downsampled iterations
                 cent=np.reshape([],(0,data.ndim-1)) 
                 

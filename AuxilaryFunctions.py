@@ -158,19 +158,38 @@ def GetData(data_name):
         print 'unknown dataset name!'
     return data
     
-def GetCentersData(data,data_name,NumCent,rep): #Get intialization centers using group lasso
+def GetCentersData(data,NumCent,data_name=[],rep=0): 
+    """
+    Get intialization centers using group lasso
     
+    Input
+    ----------
+    data : array, shape (T, X,Y,(,Z))
+        data
+    data_name: string
+        dataset name so we can save load previous center data
+    NumCent: integer
+        number centers to extract
+    rep: integer
+        repetition number
+        
+    Output
+    ----------
+    activity: array, shape (L,T)
+        extracted temporal components
+    
+    """
     from numpy import  array,percentile    
     from BlockGroupLasso import gaussian_group_lasso, GetCenters
     from pylab import load
     import os
     import cPickle
         
-    DataFolder=GetDataFolder()
-    
+    if data_name!=[]:
+        DataFolder=GetDataFolder()    
     center_file_name=DataFolder + '/centers_'+ data_name + '_rep_' + str(rep)
     if NumCent>0:
-        if os.path.isfile(center_file_name)==False:
+        if data_name==[] or os.path.isfile(center_file_name)==False:
             if data.ndim==3:
                 sig0=(2,2)
             else:
@@ -209,12 +228,14 @@ def GetCentersData(data,data_name,NumCent,rep): #Get intialization centers using
 #            ax3.set_title('Denoised data')
 #            plt.show()
 #        
+            # save results
             f = file(center_file_name, 'wb')
         
             cPickle.dump(cent, f, protocol=cPickle.HIGHEST_PROTOCOL)
             f.close()
         else:
-            cent=load(center_file_name)
+            if data_name!=[]:
+                cent=load(center_file_name)
                 
         new_cent=(array(cent)[:-1]).T                
         new_cent=new_cent[:NumCent] #just give strongest centers
