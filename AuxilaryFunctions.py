@@ -148,12 +148,15 @@ def GetData(data_name):
         data=np.asarray(data,dtype='float')  
         data=data[:,150:350,150:350] #take only a small patch
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
-    elif data_name=='Ja_Ni1':           
+    elif data_name=='Ja_Ni_ds3':           
         img= tff.TiffFile(DataFolder + 'NaJi_Dendrites\sparse_dendrites\Sparse-dendrite_Aaron.tif')
         data=img.asarray()
         data=np.transpose(data, [0,2,1]) 
         data=data[:,100:400]
+        ds=3  
+        data=data[:int(len(data) / ds) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+      
     else:
         print 'unknown dataset name!'
     return data
@@ -185,9 +188,9 @@ def GetCentersData(data,NumCent,data_name=[],rep=0):
     import os
     import cPickle
         
-    if data_name!=[]:
-        DataFolder=GetDataFolder()    
-    center_file_name=DataFolder + '/centers_'+ data_name + '_rep_' + str(rep)
+    
+    DataFolder=GetDataFolder()    
+    center_file_name=DataFolder + '/centers_'+ str(data_name) + '_rep_' + str(rep)
     if NumCent>0:
         if data_name==[] or os.path.isfile(center_file_name)==False:
             if data.ndim==3:
