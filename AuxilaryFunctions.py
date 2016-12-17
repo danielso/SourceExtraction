@@ -5,6 +5,16 @@ Created on Thu Nov 12 13:52:06 2015
 @author: Daniel
 """
 import numpy as np
+
+
+def make_sure_path_exists(path):
+    import os
+    import errno
+    try:
+        os.makedirs(path)
+    except OSError as exception:
+        if exception.errno != errno.EEXIST:
+            raise
     
 def GetFileName(params_dict,rep):
 
@@ -48,6 +58,8 @@ def GetDataFolder():
         DataFolder='G:/BackupFolder/'
     else:
         DataFolder='Data/'
+        
+    make_sure_path_exists(DataFolder)
     
     return DataFolder
     
@@ -152,7 +164,7 @@ def GetData(data_name):
         img= tff.TiffFile(DataFolder + 'NaJi_Dendrites\sparse_dendrites\Sparse-dendrite_Aaron.tif')
         data=img.asarray()
         data=np.transpose(data, [0,2,1]) 
-        data=data[:,100:400]
+        data=data[:,100:400,10:]
         ds=3  
         data=data[:int(len(data) / ds) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
@@ -190,6 +202,7 @@ def GetCentersData(data,NumCent,data_name=[],rep=0):
         
     
     DataFolder=GetDataFolder()    
+
     center_file_name=DataFolder + '/centers_'+ str(data_name) + '_rep_' + str(rep)
     if NumCent>0:
         if data_name==[] or os.path.isfile(center_file_name)==False:
@@ -559,4 +572,5 @@ def ThresholdShapes(shapes,adaptBias,TargetAreaRatio,MaxRatio):
 #    pp.savefig(fig)
 #    pp.close()
 #    
+    
     

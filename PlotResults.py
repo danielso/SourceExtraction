@@ -8,14 +8,19 @@ def PlotAll(SaveNames,params):
     import matplotlib.animation as animation
     from matplotlib.backends.backend_pdf import PdfPages
 #    from scipy.ndimage.measurements import label    
-    from AuxilaryFunctions import GetRandColors, max_intensity,SuperVoxelize,GetData,PruneComponents,SplitComponents,ThresholdShapes,MergeComponents,ThresholdData
+    from AuxilaryFunctions import GetRandColors, max_intensity,SuperVoxelize,GetData,PruneComponents,SplitComponents,ThresholdShapes,MergeComponents,ThresholdData,make_sure_path_exists
 #    from BlockLocalNMF_AuxilaryFunctions import HALS4activity
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    sys.path.append('OASIS/')
+    from mpl_toolkits.axes_grid1 import make_axes_locatable    
     from functions import deconvolve
-#
-#    sys.path.append('Constrained_NMF/ca_source_extraction/')
-#    from Deconvolution import update_temporal_components,CNMFSetParms
+    
+    # makse sure relevant folders exist, and add to path    
+    Results_folder='Results/'
+    make_sure_path_exists(Results_folder)
+        
+    OASIS_path='OASIS/'   
+    make_sure_path_exists(OASIS_path)
+    sys.path.append(OASIS_path)
+
 
     ## plotting params 
     # what to plot 
@@ -50,7 +55,8 @@ def PlotAll(SaveNames,params):
     dpi=200 #for videos
     restrict_support=True #in shape video, zero out data outside support of shapes
     C=4 #number of components to show in shape videos (if larger then number of shapes L, then we automatically set C=L)
-    color_map='gnuplot'
+    color_map='gray' #'gnuplot'
+    frame_rate=10.0 #Hz
     
     # Fetch experimental 3D data 
     data=GetData(params.data_name)
@@ -89,8 +95,6 @@ def PlotAll(SaveNames,params):
     min_dim=np.argmin(dims[1:])
     denoised_data=0    
     detrended_data=data
-    
-    Results_folder='Results/'
     
     for rep in range(len(SaveNames)): 
         resultsName=SaveNames[rep]
@@ -153,7 +157,7 @@ def PlotAll(SaveNames,params):
 #        g_calcium=(1-1/30)*np.ones((len(activity),1)) #Jake's Guess - add g=g_calcium to update_temporal_components inputs to fix AR constants
 #        if params.Background_num<=1: #the constrained foopsi code does not work with more than one background component
         for ll in range(L):
-            activity[ll], spikes, baseline, g, lam = deconvolve(activity_NonNegative[ll], penalty=0)
+            activity[ll], spikes, baseline, g, lam = deconvolve(activity_NonNegative[ll],optimize_g=10,penalty=0)
 #            activity,background_activity,S,bl,c1,sn,g,junk = update_temporal_components(data.reshape((len(data),-1)).transpose(), shapes.reshape((len(shapes),-1)).transpose(), background_shapes.reshape((len(background_shapes),-1)).transpose(), activity,background_activity,**options['temporal_params'])
         activity_noisy=np.copy(activity_NonNegative)
         activity_NonNegative=activity
@@ -196,8 +200,12 @@ def PlotAll(SaveNames,params):
     #%% ###### Plot Individual neurons' activities
     index=0 #component display index
     sz=np.min([ComponentsInFig,L+adaptBias])
-    a=ceil(sqrt(sz))  
-    b=ceil(sz/a)  
+    
+#    a=ceil(sqrt(sz))  
+#    b=ceil(sz/a)  
+    
+    a=sz
+    b=1
     
     if plot_activities:
         pp = PdfPages(Results_folder + 'Activities'+resultsName+'.pdf')        
@@ -210,7 +218,8 @@ def PlotAll(SaveNames,params):
             time=range(len(activity[ii]))
             plt.plot(time,activity_noisy[ii],linewidth=0.5,c='r')
             plt.plot(time,activity[ii],linewidth=3,c='b')
-            plt.setp(ax, xticks=[],yticks=[0])
+            ma=np.max([np.max(activity[ii]),np.max(activity_noisy[ii])])            
+            plt.setp(ax, xticks=[],yticks=[0,ma])
             # component number
             ax.text(0.02, 0.8, str(ii),
                 verticalalignment='bottom', horizontalalignment='left',
@@ -220,7 +229,7 @@ def PlotAll(SaveNames,params):
             if ((ii%ComponentsInFig)==(ComponentsInFig-1)) or ii==(L+adaptBias-1):                 
                 index=0
                 if save_plot==True:
-                    plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
+                    plt.subplots_adjust(left*2, bottom, right, top, wspace, hspace*2)
                     pp.savefig(fig0)    
         pp.close()
         if close_figs:
@@ -760,7 +769,7 @@ def PlotAll(SaveNames,params):
         mi = 0
         ma = np.percentile(data,satuartion_percentile)
         mi3 = 0
-        ma3 = np.percentile(residual[residual>0],satuartion_percentile)
+        ma3 = ma/np.max([np.floor(ma/np.percentile(residual[residual>0],satuartion_percentile)),1])
 
         ii=0
         #import colormaps as cmaps
@@ -778,23 +787,29 @@ def PlotAll(SaveNames,params):
         pic=denoised_data[ii]
         im_array += [ax1.imshow(pic,interpolation='None')]
         ax1.set_title('Denoised')
-        plt.colorbar(im_array[-1])
         plt.setp(ax1,xticks=[],yticks=[])
         
         ax2 = plt.subplot(a,b,2)
         pic=data[ii]
             
         im_array += [ax2.imshow(pic, vmin=mi, vmax=ma,cmap=cmap)]
-        title=ax2.set_title('Data')            
-        plt.colorbar(im_array[-1])
+        title=ax2.set_title('Data')  
         plt.setp(ax2,xticks=[],yticks=[])
+        divider = make_axes_locatable(ax2)
+        cax2 = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im_array[-1], cax=cax2)          
+
+        
         
         ax3 = plt.subplot(a,b,3)            
         pic=residual[ii]   
         im_array += [ax3.imshow(pic, vmin=mi3, vmax=ma3,cmap=cmap)]
         ax3.set_title('Residual x' + '%.1f' % (ma/ma3))
-        plt.colorbar(im_array[-1])
         plt.setp(ax3,xticks=[],yticks=[])
+        divider = make_axes_locatable(ax3)
+        cax3 = divider.append_axes("right", size="5%", pad=0.05)
+        plt.colorbar(im_array[-1], cax=cax3)
+        
 
 #        fig.tight_layout()
         plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
@@ -803,13 +818,16 @@ def PlotAll(SaveNames,params):
             im_array[0].set_data(denoised_data[ii])
             im_array[1].set_data(data[ii])        
             im_array[2].set_data(residual[ii])                     
-
-            title.set_text('Data, time = %.1f' % ii)
+            
+            if frame_rate!=[]:
+                title.set_text('Data, time = %.2f sec' % (ii/frame_rate))
+            else:
+                title.set_text('Data, time = %.1f' % ii)
         
         if save_video==True:
             writer = animation.writers['ffmpeg'](fps=10)
             ani = animation.FuncAnimation(fig, update, frames=len(data), blit=False, repeat=False)
-            ani.save(Results_folder + 'Data_Denoised_Residual_2D_' +resultsName+'.mp4',dpi=dpi,writer=writer)
+            ani.save(Results_folder + 'Data_Denoised_Residual_2D_' +resultsName+'.avi',dpi=dpi,writer=writer)
         else:
             ani = animation.FuncAnimation(fig, update, frames=len(data), blit=False, repeat=False)
             plt.show()  
