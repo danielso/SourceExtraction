@@ -4,6 +4,16 @@ Created on Thu Nov 12 13:52:06 2015
 
 @author: Daniel
 """
+from __future__ import print_function
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import absolute_import
+from builtins import int
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from past.utils import old_div
 import numpy as np
 
 
@@ -32,7 +42,7 @@ def GetRandColors(n):
     colors=[]
     for i in range(n):
         color=np.random.uniform(low=0,high=1,size=(1,3))
-        colors.append(color/np.sum(color))
+        colors.append(old_div(color,np.sum(color)))
     
     return np.array(colors)
     
@@ -52,12 +62,15 @@ def max_intensity(x,axis): #get the pixel with maximum total intensity in a colo
     
     
 def GetDataFolder():
-    import os
     
-    if os.getcwd()[0]=='C':
-        DataFolder='G:/BackupFolder/'
-    else:
-        DataFolder='Data/'
+    DataFolder='G:/BackupFolder/'
+        
+#    import os
+#    
+#    if os.getcwdu()[0]=='C':
+#        DataFolder='G:/BackupFolder/'
+#    else:
+#        DataFolder='Data/'
         
     make_sure_path_exists(DataFolder)
     
@@ -166,11 +179,11 @@ def GetData(data_name):
         data=np.transpose(data, [0,2,1]) 
         data=data[:,100:400,10:]
         ds=3  
-        data=data[:int(len(data) / ds) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
+        data=data[:int(old_div(len(data), ds)) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
       
     else:
-        print 'unknown dataset name!'
+        print('unknown dataset name!')
     return data
     
 def GetCentersData(data,NumCent,data_name=[],rep=0): 
@@ -198,7 +211,7 @@ def GetCentersData(data,NumCent,data_name=[],rep=0):
     from BlockGroupLasso import gaussian_group_lasso, GetCenters
     from pylab import load
     import os
-    import cPickle
+    import pickle
         
     
     DataFolder=GetDataFolder()    
@@ -216,14 +229,14 @@ def GetCentersData(data,NumCent,data_name=[],rep=0):
             ds= 50 #downscale time for group lasso        
             NonNegative=True
     
-            downscaled_data=data[:int(len(data) / ds) * ds].reshape((-1, ds) + data.shape[1:]).max(1) #for speed ups
+            downscaled_data=data[:int(old_div(len(data), ds)) * ds].reshape((-1, ds) + data.shape[1:]).max(1) #for speed ups
             x = gaussian_group_lasso(downscaled_data, sig0, lam,NonNegative=NonNegative, TargetAreaRatio=TargetRange, verbose=True, adaptBias=False)
             pic_x = percentile(x, 95, axis=0)
 
                 ######
             # centers extracted from fista output using RegionalMax
             cent = GetCenters(pic_x)
-            print np.shape(cent)[0]
+            print(np.shape(cent)[0])
                 
             # Plot Results
 #            import matplotlib.pyplot as plt
@@ -245,10 +258,12 @@ def GetCentersData(data,NumCent,data_name=[],rep=0):
 #            plt.show()
 #        
             # save results
-            f = file(center_file_name, 'wb')
-        
-            cPickle.dump(cent, f, protocol=cPickle.HIGHEST_PROTOCOL)
-            f.close()
+            if data_name!=[]:
+                from io import open
+                f = open(center_file_name, 'wb')
+            
+                pickle.dump(cent, f, protocol=pickle.HIGHEST_PROTOCOL)
+                f.close()
         else:
             if data_name!=[]:
                 cent=load(center_file_name)
@@ -288,7 +303,7 @@ def SuperVoxelize(data): #obsolete
         trace=np.dot(ind,data)
         ind=np.ravel(ind)
         data[ind]=trace
-        print ii
+        print(ii)
     
     data=np.reshape(data,shape_data)
     data=np.transpose(data,axes=[3,0,1,2])
@@ -323,19 +338,19 @@ def MergeComponents(shapes,activity,L,threshold,sig):
         temp=0*shapes[ll]
         temp[shapes[ll]>0]=1
         temp2=gaussian_filter(temp,[sig]*D)
-        masks[ll]=temp2>0.5/(np.sqrt(2*np.pi)*sig)**D
+        masks[ll]=temp2>old_div(0.5,(np.sqrt(2*np.pi)*sig)**D)
 
     masks=masks.reshape(L,-1)
     nearby_shapes=np.dot(masks,masks.T)>0
 
     activity_cov=np.dot(activity[:L],activity[:L].T)
     activity_vars=np.diag(activity_cov).reshape(-1,1)
-    activity_corr=activity_cov/np.sqrt(np.dot(activity_vars,activity_vars.T))
+    activity_corr=old_div(activity_cov,np.sqrt(np.dot(activity_vars,activity_vars.T)))
     
     shapes_array=shapes[:L].reshape(L,-1)
     shapes_cov=np.dot(shapes_array,shapes_array.T)
     shape_vars=np.diag(shapes_cov).reshape(-1,1)
-    shapes_corr=np.nan_to_num(shapes_cov/np.sqrt(np.dot(shape_vars,shape_vars.T)))
+    shapes_corr=np.nan_to_num(old_div(shapes_cov,np.sqrt(np.dot(shape_vars,shape_vars.T))))
 
     merge_ind=(activity_corr>threshold)|(shapes_corr>threshold)
     merge_ind[nearby_shapes==0]=0
@@ -347,10 +362,10 @@ def MergeComponents(shapes,activity,L,threshold,sig):
     comp2merge = defaultdict(list)
     for ii,item in enumerate(labels):
         comp2merge[item].append(ii)
-    comp2merge = {k:v for k,v in comp2merge.items() if len(v)>1}
+    comp2merge = {k:v for k,v in list(comp2merge.items()) if len(v)>1}
 
     deleted_indices=[]
-    for item in comp2merge.itervalues():    
+    for item in comp2merge.values():    
         for kk in item[1:]:
             deleted_indices.append(kk)        
             shapes[item[0]]+=shapes[kk]
@@ -517,7 +532,7 @@ def ThresholdShapes(shapes,adaptBias,TargetAreaRatio,MaxRatio):
                 elif (np.mean(temp) > TargetAreaRatio[1]):
                     threshold_low = threshold
                 else:
-                    print np.mean(temp)
+                    print(np.mean(temp))
                     temp=np.copy(shapes[ll])
                     temp[temp<threshold]=0
                     shapes[ll]=np.copy(temp)
@@ -526,9 +541,9 @@ def ThresholdShapes(shapes,adaptBias,TargetAreaRatio,MaxRatio):
                 if threshold_high == -1:
                     threshold = threshold * rho
                 elif threshold_low == -1:
-                    threshold = threshold / rho
+                    threshold = old_div(threshold, rho)
                 else:
-                    threshold = (threshold_high + threshold_low) / 2
+                    threshold = old_div((threshold_high + threshold_low), 2)
         
         for ll in range(L): 
             temp=np.copy(shapes[ll])

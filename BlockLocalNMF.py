@@ -1,10 +1,22 @@
+from __future__ import print_function
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import absolute_import
+from builtins import int
+from future import standard_library
+standard_library.install_aliases()
+from builtins import map
+from builtins import range
+from past.utils import old_div
 from numpy import asarray, percentile, zeros, ones, ix_, arange, exp, prod, repeat
 import numpy as np
 from BlockLocalNMF_AuxilaryFunctions import  HALS4activity, HALS4shape,RenormalizeDeleteSort,addComponent,GetBox, \
-RegionAdd,RegionCut,DownScale,LargestConnectedComponent,LargestWatershedRegion,SmoothBackground,GetSnPSDArray,ExponentialSearch,GrowMasks,GetSnPSD,FISTA4shape
-from AuxilaryFunctions import PruneComponents,MergeComponents      
+RegionAdd,RegionCut,DownScale,LargestConnectedComponent,LargestWatershedRegion,SmoothBackground,GetSnPSDArray,ExponentialSearch,GrowMasks,FISTA4shape
+from AuxilaryFunctions import PruneComponents,MergeComponents,make_sure_path_exists      
 import sys
-sys.path.append('OASIS/')
+OASIS_path='OASIS/'
+make_sure_path_exists(OASIS_path)
+sys.path.append(OASIS_path)
 from functions import deconvolve  
 
 def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=False,adaptBias=True,TargetAreaRatio=[],estimateNoise=False,
@@ -105,11 +117,11 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
     boxes = zeros((L, D - 1, 2), dtype=int) #initial support of spatial components
     MSE_array = [] #CNMF residual error
     mb = mbs[0] if iters0[0] > 0 else 1 
-    activity = zeros((L, dims[0] / mb)) #array of temporal components
+    activity = zeros((L, old_div(dims[0], mb))) #array of temporal components
     lam1_s0=np.copy(lam1_s) #intial spatial sparsity (l1) parameters
     if TargetAreaRatio!=[]:
         if TargetAreaRatio[0]>TargetAreaRatio[1]:            
-            print 'WARNING -  TargetAreaRatio[0]>TargetAreaRatio[1] !!!'
+            print('WARNING -  TargetAreaRatio[0]>TargetAreaRatio[1] !!!')
     if iters0[0] == 0:
         ds = 1
 
@@ -117,14 +129,14 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
 ### Initialize shapes, activity, and residual ###        
     
     data0,dims0=DownScale(data,mb,ds) #downscaled data and dimensions
-    if type(ds)==int:
+    if isinstance(ds,int):
         ds=ds*np.ones(D-1)
 
     if D == 4: #downscale activity
-        activity = data0[:, map(int, centers[:, 0] / ds[0]), map(int, centers[:, 1] / ds[1]),
-                         map(int, centers[:, 2] / ds[2])].T
+        activity = data0[:, list(map(int, old_div(centers[:, 0], ds[0]))), list(map(int, old_div(centers[:, 1], ds[1]))),
+                         list(map(int, old_div(centers[:, 2], ds[2])))].T
     else:
-        activity = data0[:, map(int, centers[:, 0] / ds[0]), map(int, centers[:, 1] / ds[1])].T
+        activity = data0[:, list(map(int, old_div(centers[:, 0], ds[0]))), list(map(int, old_div(centers[:, 1], ds[1])))].T
         
     data0 = data0.reshape(dims0[0], -1) #reshape data0 to more convient timexspace form
     Energy0=np.sum(data0**2,axis=0) #data0 energy per pixel
@@ -139,11 +151,11 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
     
     # extract shapes and activity from given centers
     for ll in range(L):
-        boxes[ll] = GetBox(centers[ll] / ds, R / ds, dims0[1:])
+        boxes[ll] = GetBox(old_div(centers[ll], ds), old_div(R, ds), dims0[1:])
         temp = zeros(dims0[1:])
-        temp[map(lambda a: slice(*a), boxes[ll])]=1
+        temp[[slice(*a) for a in boxes[ll]]]=1
         mask += np.where(temp.ravel())
-        temp = [(arange(int(dims[i + 1] / ds[i])) -int( centers[ll][i] / ds[i])) ** 2 / (2 * (sig[i] / ds[i]) ** 2)
+        temp = [old_div((arange(int(old_div(dims[i + 1], ds[i]))) -int( old_div(centers[ll][i], ds[i]))) ** 2, (2 * (old_div(sig[i], ds[i])) ** 2))
                 for i in range(D - 1)]
         temp = exp(-sum(ix_(*temp)))
         temp.shape = (1,) + dims0[1:]
@@ -175,7 +187,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
             for kk in range(iters0[it]):
                 # update sparisty parameters     
                 if kk%updateLambdaIntervals==0:                 
-                    sn=np.sqrt(Energy0-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0))/dims0[0] # efficient way to calcuate MSE per pixel
+                    sn=old_div(np.sqrt(Energy0-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0)),dims0[0]) # efficient way to calcuate MSE per pixel
         
                     delta_sn=sn-sn_target # noise margin
                     signcheck=(data0sum-np.dot(np.sum(activity.T,axis=0),S))<0
@@ -194,7 +206,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                             cond_increase=temp<-sn_std
                         else:
                             if adaptBias:
-                                spars[-1]=(TargetAreaRatio[1]+TargetAreaRatio[0])/2 # ignore sparsity target for background (bias) component  
+                                spars[-1]=old_div((TargetAreaRatio[1]+TargetAreaRatio[0]),2) # ignore sparsity target for background (bias) component  
                             temp2=repeat(spars.reshape(-1,1),len(S[0]),axis=1)
                             cond_increase=np.logical_or(temp2>TargetAreaRatio[1],temp<-sn_std)
                             cond_decrease=np.logical_and(temp2<TargetAreaRatio[0],temp>sn_std)
@@ -216,7 +228,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                         MSE_std=np.mean(sn_std**2)
                         checkNoZero= not((0 in np.sum(activity,axis=1)) and (0 in np.sum(S,axis=1)))
                         if ((MSE-MSE_target>2*MSE_std) and checkNoZero and (delta_sn[new_cent]>sn_std[new_cent])):                            
-                            S, activity, mask,centers,boxes,L=addComponent(new_cent,data0,dims0,R/ds,S, activity, mask,centers,boxes,adaptBias)
+                            S, activity, mask,centers,boxes,L=addComponent(new_cent,data0,dims0,old_div(R,ds),S, activity, mask,centers,boxes,adaptBias)
                             new_lam=lam1_s0*np.ones_like(data0[0,:]).reshape(1,-1)
                             lam1_s=np.insert(lam1_s,0,values=new_lam,axis=0)
                             ES=ExponentialSearch(lam1_s) #we need to restart exponential search each time we add a component
@@ -237,19 +249,19 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                 S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)
                 lam1_s=ES.lam
                 if SmoothBkg==True:
-                    S=SmoothBackground(S,dims0,adaptBias,tuple(np.array(sig)/np.array(ds)))
+                    S=SmoothBackground(S,dims0,adaptBias,tuple(old_div(np.array(sig),np.array(ds))))
                 
-                print 'Subsampled iteration',kk,'it=',it,'L=',L
+                print('Subsampled iteration',kk,'it=',it,'L=',L)
             
             # use next (smaller) value for temporal downscaling
             if it < len(iters0) - 1:
                 mb = mbs[it + 1]
                 data0 = data[:len(data) / mb * mb].reshape(-1, mb, prod(dims[1:])).mean(1)
                 if D==4:
-                    data0 = data0.reshape(len(data0), int(dims[1] / ds[0]), ds[0], int(dims[2] / ds[1]), ds[1],
-                                          int(dims[3] / ds[2]), ds[2]).mean(-1).mean(-2).mean(-3)                    
+                    data0 = data0.reshape(len(data0), int(old_div(dims[1], ds[0])), ds[0], int(old_div(dims[2], ds[1])), ds[1],
+                                          int(old_div(dims[3], ds[2])), ds[2]).mean(-1).mean(-2).mean(-3)                    
                 else:
-                    data0 = data0.reshape(len(data0), int(dims[1] / ds[0]), ds[0], int(dims[2] / ds[1]),
+                    data0 = data0.reshape(len(data0), int(old_div(dims[1], ds[0])), ds[0], int(old_div(dims[2], ds[1])),
                                           ds[1]).mean(-1).mean(-2)
                 data0.shape = (len(data0), -1)
                 
@@ -284,7 +296,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
             for ll in range(L):
                 boxes[ll] = GetBox(centers[ll], R, dims[1:])
                 temp = zeros(dims[1:])
-                temp[map(lambda a: slice(*a), boxes[ll])] = 1
+                temp[[slice(*a) for a in boxes[ll]]] = 1
                 mask[ll] = np.where(temp.ravel())[0]
             
             if FixSupport: #obsolete
@@ -308,7 +320,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         
 #### Main Loop ####
   
-    print 'starting main NMF loop'
+    print('starting main NMF loop')
     for kk in range(iters):
         lam1_s=ES.lam #update sparsity parameters
         if SigmaBlur==[]:
@@ -334,9 +346,9 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)
         
         # Measure MSE and update sparsity parameters
-        print 'main iteration kk=',kk,'L=',L
+        print('main iteration kk=',kk,'L=',L)
         if (kk+1)%updateLambdaIntervals==0:            
-            sn=np.sqrt((Energy-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0))/dims0[0])
+            sn=np.sqrt(old_div((Energy-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0)),dims0[0]))
             delta_sn=sn-sn_target
             MSE = np.mean(sn**2)
             
@@ -356,7 +368,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                 cond_increase=temp<-sn_std
             else:
                 if adaptBias:
-                    spars[-1]=(TargetAreaRatio[1]+TargetAreaRatio[0])/2 # ignore sparsity target for background (bias) component  
+                    spars[-1]=old_div((TargetAreaRatio[1]+TargetAreaRatio[0]),2) # ignore sparsity target for background (bias) component  
                 temp2=repeat(spars.reshape(-1,1),len(S[0]),axis=1)
                 cond_increase=np.logical_or(temp2>TargetAreaRatio[1],temp<-sn_std)
                 cond_decrease=np.logical_and(temp2<TargetAreaRatio[0],temp>sn_std)
@@ -364,7 +376,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
             
             ES.update(cond_decrease,cond_increase)
             lam1_s=ES.lam
-            if kk<iters/3: #restart exponential search unless enough iterations have passed
+            if kk<old_div(iters,3): #restart exponential search unless enough iterations have passed
                 ES=ExponentialSearch(lam1_s)                
             else:
                 if not(np.any(cond_increase) or np.any(cond_decrease)):
@@ -373,8 +385,8 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                 if L+adaptBias>1: # if we have more then one component just keep exponitiated grad descent instead
                     if (kk+1)%updateRhoIntervals==0: #update rho every updateRhoIntervals if we are still not converged
                         if np.any(spars[:L]<TargetAreaRatio[0]) or np.any(spars[:L]>TargetAreaRatio[1]):
-                            ES.rho=2-1/(ES.rho)
-                            print 'rho=',ES.rho
+                            ES.rho=2-old_div(1,(ES.rho))
+                            print('rho=',ES.rho)
                     ES=ExponentialSearch(lam1_s,rho=ES.rho)
             
             # prinst MSE and other information

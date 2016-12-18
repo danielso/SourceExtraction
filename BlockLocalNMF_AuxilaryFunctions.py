@@ -4,6 +4,17 @@ Created on Mon Jun 06 12:08:01 2016
 
 @author: Daniel
 """
+from __future__ import print_function
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import absolute_import
+from builtins import round
+from builtins import int
+from future import standard_library
+standard_library.install_aliases()
+from builtins import range
+from builtins import object
+from past.utils import old_div
 from numpy import min, max, zeros, reshape, r_
 import numpy as np
 from scipy.signal import welch
@@ -88,7 +99,7 @@ def HALS4activity(data, S, activity,NonNegative=True,lam1_t=0,lam2_t=0,dims=0,Si
 
     for _ in range(iters):
         for ll in range(len(S)):
-            activity[ll] += np.nan_to_num((A[ll] - np.dot(B[ll].T, activity)-lam1_t-lam2_t*activity[ll]  ) / B[ll, ll]) #maybe multiply lam1_t by np.sign[activity[ll]?
+            activity[ll] += np.nan_to_num(old_div((A[ll] - np.dot(B[ll].T, activity)-lam1_t-lam2_t*activity[ll]  ), B[ll, ll])) #maybe multiply lam1_t by np.sign[activity[ll]?
             if NonNegative:
                 activity[ll][activity[ll] < 0] = 0
     return activity
@@ -140,9 +151,9 @@ def HALS4shape(data, S, activity,mask,lam1_s=0,lam2_s=0,adaptBias=0,iters=1):
     for _ in range(iters):
         for ll in range(L-adaptBias):
             if ll == L:
-                S[ll] += np.nan_to_num((C[ll] - np.dot(D[ll], S)-lam1_s[ll]-lam2_s*S[ll]) / D[ll, ll])
+                S[ll] += np.nan_to_num(old_div((C[ll] - np.dot(D[ll], S)-lam1_s[ll]-lam2_s*S[ll]), D[ll, ll]))
             else:
-                S[ll, mask[ll]] += np.nan_to_num((C[ll, mask[ll]]- np.dot(D[ll], S[:, mask[ll]])-lam1_s[ll,mask[ll]]-lam2_s*S[ll,mask[ll]])/ D[ll, ll])
+                S[ll, mask[ll]] += np.nan_to_num(old_div((C[ll, mask[ll]]- np.dot(D[ll], S[:, mask[ll]])-lam1_s[ll,mask[ll]]-lam2_s*S[ll,mask[ll]]), D[ll, ll]))
 
 #           NonNegative shapes:
             S[ll][S[ll] < 0] = 0 #add mask here
@@ -197,10 +208,10 @@ def FISTA4shape(data, S, activity,mask,lam1_s,adaptBias,Sigma,dims,iters=30):
     for kk in range(iters):
         S_prev = S + 0
         t = t_next + 0         
-        t_next = (1 + np.sqrt(1 + 4 * (t ** 2))) / 2 
+        t_next = old_div((1 + np.sqrt(1 + 4 * (t ** 2))), 2) 
         GS=gaussian_filter_spatial(SS, 2*Sigma,spatial_dims)
         
-        S = SS - (2 / Lip) * (np.dot(D,GS)  - C)- lam1_s/Lip        
+        S = SS - (old_div(2, Lip)) * (np.dot(D,GS)  - C)- old_div(lam1_s,Lip)        
         S[S<0]=0
         SS = S + (t - 1) / t_next * (S - S_prev)
 
@@ -275,7 +286,7 @@ def RenormalizeDeleteSort( S, activity, mask,centers,boxes,ES,adaptBias,MedianFi
             S_normalization=np.sum(S[ll])
         A_normalization=np.sum(activity[ll])
         if A_normalization>0:
-            activity[ll]=activity[ll]/A_normalization 
+            activity[ll]=old_div(activity[ll],A_normalization) 
             S[ll]=S[ll]*A_normalization 
         if ll<L: # don't delete background component
             if ((A_normalization<=0) and (S_normalization<=0)):
@@ -357,7 +368,7 @@ def addComponent(new_cent,current_data,data_dim,box_size,S, activity, mask,cente
     boxes=np.insert(boxes,0,GetBox(centers[0], box_size, data_dim[1:]),axis=0)
             
     temp = zeros(data_dim[1:])
-    temp[map(lambda a: slice(*a), boxes[0])]=1
+    temp[[slice(*a) for a in boxes[0]]]=1
     temp2=np.where(temp.ravel())[0]
     mask.insert(0,temp2)
     
@@ -380,7 +391,7 @@ def RegionAdd(Z, X, box):
     #  X : array, shape (T, prod(diff(box,1))), Input
     # Returns
     #  Z : array, shape (T, X, Y[, Z]), Z+X on box region
-    Z[[slice(len(Z))] + list(map(lambda a: slice(*a), box))
+    Z[[slice(len(Z))] + list([slice(*a) for a in box])
       ] += reshape(X, (r_[-1, box[:, 1] - box[:, 0]]))
     return Z
 
@@ -392,7 +403,7 @@ def RegionCut(X, box):
     # Returns
     #  res : array, shape (T, prod(diff(box,1))),
     dims = X.shape
-    return X[[slice(dims[0])] + list(map(lambda a: slice(*a), box))].reshape((dims[0], -1))
+    return X[[slice(dims[0])] + list([slice(*a) for a in box])].reshape((dims[0], -1))
     
 def DownScale(data,mb,ds):
     """
@@ -421,18 +432,18 @@ def DownScale(data,mb,ds):
     else:
         dims = data.shape
         D = len(dims)
-        if type(ds)==int:
+        if isinstance(ds,int):
             ds=ds*np.ones(D-1)
         elif (len(ds)!=D-1):
-            print "either type(ds)==int, or len(ds)== the number of spatial dimensions in data"
+            print("either type(ds)==int, or len(ds)== the number of spatial dimensions in data")
             return
-        data0 = data[:int(len(data) / mb) * mb].reshape((-1, mb) + data.shape[1:]).mean(1)
+        data0 = data[:int(old_div(len(data), mb)) * mb].reshape((-1, mb) + data.shape[1:]).mean(1)
         if D == 4:
-            data0 = data0[:,:int(dims[1] /ds[0]) *ds[0],:int(dims[2] /ds[1]) *ds[1],:int(dims[3] /ds[2]) *ds[2]].reshape(
-                len(data0), dims[1] / ds[0], ds[0], dims[2] / ds[1], ds[1], dims[3] / ds[2], ds[2])\
+            data0 = data0[:,:int(old_div(dims[1],ds[0])) *ds[0],:int(old_div(dims[2],ds[1])) *ds[1],:int(old_div(dims[3],ds[2])) *ds[2]].reshape(
+                len(data0), old_div(dims[1], ds[0]), ds[0], old_div(dims[2], ds[1]), ds[1], old_div(dims[3], ds[2]), ds[2])\
                 .mean(2).mean(3).mean(4)
         else:
-            data0 = data0[:,:int(dims[1] /ds[0]) *ds[0],:int(dims[2] /ds[1]) *ds[1]].reshape(len(data0), dims[1] / ds[0], ds[0], dims[2] / ds[1], ds[1]).mean(2).mean(3)
+            data0 = data0[:,:int(old_div(dims[1],ds[0])) *ds[0],:int(old_div(dims[2],ds[1])) *ds[1]].reshape(len(data0), old_div(dims[1], ds[0]), ds[0], old_div(dims[2], ds[1]), ds[1]).mean(2).mean(3)
         # for i,d in enumerate(dims[1:]):
         #     data0 = data0.reshape(data0.shape[:1+i] + (d / ds, ds, -1)).mean(2+i)
 
@@ -570,7 +581,7 @@ def SmoothBackground(shapes,dims,adaptBias,sig_filt):
         markers,num_markers = label(local_maxi)
         if num_markers>1:
             foo=gaussian_filter(1.0*(markers==1),sig_filt)
-            nonzero_mask=(foo/np.max(foo))>thresh
+            nonzero_mask=(old_div(foo,np.max(foo)))>thresh
 
             temp2=shapes[-1].reshape(dims[1:])
             temp2[nonzero_mask]=0
@@ -582,17 +593,17 @@ def SmoothBackground(shapes,dims,adaptBias,sig_filt):
 def GetSnPSD(Y):
     # Estimate noise level for a time series
     L = len(Y)
-    ff, psd_Y = welch(Y, nperseg=round(L / 8))
-    sn = np.sqrt(np.mean(psd_Y[ff > .3] / 2))
+    ff, psd_Y = welch(Y, nperseg=round(old_div(L, 8)))
+    sn = np.sqrt(np.mean(old_div(psd_Y[ff > .3], 2)))
     return sn
 
 
 def GetSnPSDArray(Y,f_low=10,f_high=0.6):
     # Estimate noise level for an array of time series
-    print "Calculating noise level..."
+    print("Calculating noise level...")
     N = len(Y)
     fmin=np.round(f_high*N/2)
-    fmax=np.round(N/2) #maximal frequency is at N/2 - the rest is just symmetric
+    fmax=np.round(old_div(N,2)) #maximal frequency is at N/2 - the rest is just symmetric
 #        try:
 #            psd_Y = (np.abs(np.fft.fft(Y, axis=0))**2)/N
 #        except MemoryError:
@@ -600,18 +611,18 @@ def GetSnPSDArray(Y,f_low=10,f_high=0.6):
     if np.ndim(Y)==2:
         M=Y.shape[1]
         for kk in range(M):
-            psd_Y[:,kk] = (np.abs(np.fft.fft(Y[:,kk]))**2)/N
-            counter=(kk/float(M))*100
+            psd_Y[:,kk] = old_div((np.abs(np.fft.fft(Y[:,kk]))**2),N)
+            counter=(old_div(kk,float(M)))*100
             if (counter%10)==0:
-                print counter,'%'
+                print(counter,'%')
 #            else: 
 #                raise
-    sn=np.sqrt(psd_Y[fmin:fmax].mean(0))+np.sqrt(2*psd_Y[1:f_low].sum(0))/N # white noise + low freq stuff
+    sn=np.sqrt(psd_Y[fmin:fmax].mean(0))+old_div(np.sqrt(2*psd_Y[1:f_low].sum(0)),N) # white noise + low freq stuff
     sn_std=0.5*sn/np.sqrt(N)
-    print "Done"
+    print("Done")
     return sn,sn_std
 
-class ExponentialSearch:
+class ExponentialSearch(object):
     # Class for storing and update sparsity parameters
     def __init__(self,lam,rho=1.5):
         # lam - an array of parameter values
@@ -632,8 +643,8 @@ class ExponentialSearch:
         cond2=(self.lam_low==-1)
         cond3=np.logical_not(np.logical_or(cond1,cond2))
         self.lam[cond1]=self.lam[cond1]*self.rho
-        self.lam[cond2]=self.lam[cond2]/self.rho
-        self.lam[cond3]=(self.lam_high[cond3]+self.lam_low[cond3])/2
+        self.lam[cond2]=old_div(self.lam[cond2],self.rho)
+        self.lam[cond3]=old_div((self.lam_high[cond3]+self.lam_low[cond3]),2)
         
     def delete(self,index):
         ''' delete lam,lam_high,lam_low for given index
@@ -662,7 +673,7 @@ def GrowMasks(shapes,mask,boxes,dims,skipBias,sigma):
         temp=0*shapes[ll]
         temp[shapes[ll]>0]=1
         temp2=gaussian_filter(temp,[sigma]*(D-1))
-        temp3=temp2>0.5/(np.sqrt(2*np.pi)*sigma)**(D-1)
+        temp3=temp2>old_div(0.5,(np.sqrt(2*np.pi)*sigma)**(D-1))
 #        temp3[map(lambda a: slice(*a), boxes[ll])]=1 #make sure mask does not shrink below original support
         mask[ll]=np.where(temp3.ravel())[0]
 

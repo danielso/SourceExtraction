@@ -1,5 +1,12 @@
 from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import absolute_import
 
+from future import standard_library
+standard_library.install_aliases()
+from builtins import map
+from builtins import range
 from numpy import zeros, ones, maximum, std, sum, nan_to_num, nanmean, nan,\
     mean, max, sqrt, percentile, dot, outer, asarray, meshgrid, argsort, zeros_like
 from numpy.linalg import norm
@@ -213,7 +220,7 @@ def GetROI(pic, cent):
     dims = pic.shape
     components, _ = label(pic > 0, ones([3] * len(dims)))
     ROI = -ones(dims, dtype=int)
-    mesh = meshgrid(indexing='ij', *map(range, dims))
+    mesh = meshgrid(indexing='ij', *list(map(range, dims)))
     distances = asarray(
         [sqrt(sum((mesh[i] - c[i]) ** 2 for i in range(len(dims)))) for c in cent])
     min_dist_ind = distances.argmin(0)

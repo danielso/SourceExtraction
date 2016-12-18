@@ -15,9 +15,16 @@ Old/
 Results/
 Small_Data/
 Constrained_NMF/
+Python 2.7 Code/
+OASIS/
+dipha/
 
 # python aux files
 *.pyc
+*.py.bak
+
+# ipython notebooks
+*.ipynb
 
 # Windows Installer files
 *.cab

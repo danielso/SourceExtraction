@@ -1,3 +1,12 @@
+from __future__ import print_function
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import absolute_import
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from past.utils import old_div
 import matplotlib
 matplotlib.use('Agg') # Must be before importing matplotlib.pyplot or pylab!
 
@@ -18,7 +27,7 @@ for rep in range(last_rep):
         results=load('NMF_Results/'+resultsName)
     except IOError:
         if rep==0:
-            print 'results file not found!!'              
+            print('results file not found!!')              
         else:
             break     
     shapes=results['shapes']
@@ -48,7 +57,7 @@ cmap='gnuplot'
 
 K=len(sig)
 a=np.ceil(np.sqrt(K))
-b=2*np.ceil(K/a)
+b=2*np.ceil(old_div(K,a))
 
 pp = PdfPages('Components Correlations.pdf')
 fig=plt.figure(figsize=(18,11))
@@ -58,14 +67,14 @@ for ii in range(K):
     shapes_array=shapes_array.reshape(M,-1)
     shapes_cov=np.dot(shapes_array,shapes_array.T)
     shape_vars=np.diag(shapes_cov).reshape(-1,1)
-    shapes_corr=np.nan_to_num(shapes_cov/np.sqrt(np.dot(shape_vars,shape_vars.T)))
+    shapes_corr=np.nan_to_num(old_div(shapes_cov,np.sqrt(np.dot(shape_vars,shape_vars.T))))
     ax=plt.subplot(a,b,2*ii+1)
     im=plt.imshow(shapes_corr, interpolation='none',cmap=cmap)
     plt.colorbar(im)
     plt.title('Spatial Corr. Matrix, Sig='+str(sig[ii]))
     ax2=plt.subplot(a,b,2*ii+2)
     hist, bin_edges = np.histogram(np.ndarray.flatten(shapes_corr),bins=30)
-    bins=(bin_edges[:-1]+bin_edges[1:])/2
+    bins=old_div((bin_edges[:-1]+bin_edges[1:]),2)
     im2=plt.plot(bins,hist,linewidth=2)
     plt.title('Spatial Corr.  Hist., Sig='+str(sig[ii]))
     
@@ -78,14 +87,14 @@ for ii in range(K):
     activity_array=gaussian_filter(activity_array, (0,sig[ii]))
     activity_cov=np.dot(activity_array,activity_array.T)
     activity_vars=np.diag(activity_cov).reshape(-1,1)
-    activity_corr=activity_cov/np.sqrt(np.dot(activity_vars,activity_vars.T))
+    activity_corr=old_div(activity_cov,np.sqrt(np.dot(activity_vars,activity_vars.T)))
     ax2=plt.subplot(a,b,2*ii+1)
     im2=plt.imshow(activity_corr, interpolation='none',cmap=cmap)
     plt.colorbar(im2)
     plt.title('Temporal Corr. Mat, Sig='+str(sig[ii]))
     ax2=plt.subplot(a,b,2*ii+2)
     hist, bin_edges = np.histogram(np.ndarray.flatten(activity_corr),bins=30)
-    bins=(bin_edges[:-1]+bin_edges[1:])/2
+    bins=old_div((bin_edges[:-1]+bin_edges[1:]),2)
     im2=plt.plot(bins,hist,linewidth=2)
     plt.title('Temproa Corr.  Hist., Sig='+str(sig[ii]))
     

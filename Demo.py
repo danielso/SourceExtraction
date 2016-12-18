@@ -1,4 +1,19 @@
 from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import absolute_import
+
+from builtins import dict
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from builtins import object
+
+import os #change path to where the python scripty is located
+abspath = os.path.abspath(__file__)
+dname = os.path.dirname(abspath)
+os.chdir(dname)
 
 def GetDefaultParams():
     # Get parameters for: Data type, NMF algorithm and intialization
@@ -7,11 +22,11 @@ def GetDefaultParams():
     data_name_set=['Hillman','HillmanSmall','Sophie2D','Sophie3D','SophieVoltage3D','Sophie3DSmall',
     'SaraSmall','Sara19DEC2015_w1t1','PhilConfocal','PhilMFM','PhilConfocal2','BaylorAxonsSmall',
     'BaylorAxons','BaylorAxonsQuiet','BaylorAxonsActive','BaylorAxonsJiakun1','BaylorAxonsJiakun2','Ja_Ni_ds3']
-    data_name=data_name_set[-5]
+    data_name=data_name_set[-1]
     
     # "default" parameters - for additional information see "LocalNMF" function in BlockLocalNMF
     
-    NumCent=0 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+    NumCent=1 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
     mbs=[1] # temporal downsampling of data in intial phase of NMF
     ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
     TargetAreaRatio=[0.005,0.05] # target sparsity range for spatial components - low
@@ -271,10 +286,10 @@ def GetDefaultParams():
         SigmaMask=3  
         
     elif data_name=='Ja_Ni_ds3' :
-        NumCent=40 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
-        mbs=[20] # temporal downsampling of data in intial phase of NMF
+        NumCent=30 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+        mbs=[10] # temporal downsampling of data in intial phase of NMF
         ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
-        TargetAreaRatio=[0.01,0.4] # target sparsity range for spatial components
+        TargetAreaRatio=[0.01,0.35] # target sparsity range for spatial components
         repeats=1 # how many repeations to run NMF algorithm
         iters0=[1] # number of intial NMF iterations, in which we downsample data and add components
         iters=100 # number of main NMF iterations, in which we fine tune the components on the full data
@@ -284,14 +299,14 @@ def GetDefaultParams():
         updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
         Background_num=1 #number of background components - one of which at every repetion
         bkg_per=0.05 # intialize of background shape at this percentile (over time) of video
-        sig=(10,10) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
+        sig=(5,5) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
         
         FineTune=False
         NonNegative=True # should we constrain activity and shapes to be non-negative?
         FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
         Connected=True # should we constrain all spatial component to be connected?
         WaterShed=False # should we constrain all spatial component to have only one watershed component?        
-        SigmaMask=5  
+        SigmaMask=3 
         
         
         
@@ -321,10 +336,14 @@ if __name__ == "__main__":
     import numpy as np
     from BlockLocalNMF import LocalNMF
     import matplotlib.pyplot as plt
-    from AuxilaryFunctions import GetFileName,SuperVoxelize,GetData,GetCentersData,ThresholdData
-    import cPickle
+    from AuxilaryFunctions import GetFileName,SuperVoxelize,GetData,GetCentersData,ThresholdData,make_sure_path_exists,GetDataFolder
+    import pickle 
     
     plt.close('all')
+    
+    #Make sure relevant folders exist 
+    NMF_Results_Folder='NMF_Results'
+    make_sure_path_exists(NMF_Results_Folder)
     
     plot_all=True #Plot final results (see end of this file)
     do_NMF=True # Do CNMF on data
@@ -362,14 +381,15 @@ if __name__ == "__main__":
             
             # save results to file
             L=len(shapes)
-            print str(L)+' components extracted'
+            print(str(L)+' components extracted')
             if L<=adaptBias:
                 break
-            saveName=GetFileName(params_dict,rep)        
-            f = file('NMF_Results/'+saveName, 'wb')
+            saveName=GetFileName(params_dict,rep)  
+            from io import open
+            f = open('NMF_Results/'+saveName, 'wb')
             
             results=dict([['MSE_array',MSE_array], ['shapes',shapes],['activity',activity],['cent',cent],['params',params_dict]])
-            cPickle.dump(results, f, protocol=cPickle.HIGHEST_PROTOCOL)
+            pickle.dump(results, f, protocol=pickle.HIGHEST_PROTOCOL)
             f.close()
 
             #subtract this iteration components from data       

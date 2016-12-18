@@ -1,3 +1,14 @@
+from __future__ import print_function
+from __future__ import division
+from __future__ import unicode_literals
+from __future__ import absolute_import
+from builtins import int
+from builtins import round
+from future import standard_library
+standard_library.install_aliases()
+from builtins import str
+from builtins import range
+from past.utils import old_div
 def PlotAll(SaveNames,params):
     from numpy import  min, max, percentile,asarray,ceil,sqrt
     import numpy as np
@@ -11,7 +22,6 @@ def PlotAll(SaveNames,params):
     from AuxilaryFunctions import GetRandColors, max_intensity,SuperVoxelize,GetData,PruneComponents,SplitComponents,ThresholdShapes,MergeComponents,ThresholdData,make_sure_path_exists
 #    from BlockLocalNMF_AuxilaryFunctions import HALS4activity
     from mpl_toolkits.axes_grid1 import make_axes_locatable    
-    from functions import deconvolve
     
     # makse sure relevant folders exist, and add to path    
     Results_folder='Results/'
@@ -20,7 +30,7 @@ def PlotAll(SaveNames,params):
     OASIS_path='OASIS/'   
     make_sure_path_exists(OASIS_path)
     sys.path.append(OASIS_path)
-
+    from functions import deconvolve
 
     ## plotting params 
     # what to plot 
@@ -45,7 +55,7 @@ def PlotAll(SaveNames,params):
     Threshold=False   #threshold shapes in the end and keep only connected components
     Prune=False # Remove "Bad" components (where bad is defined within SplitComponent fucntion)
     Merge=True # Merge highly correlated nearby components
-    FineTune=True # SHould we fine tune activity after post-processing? (mainly after merging)
+    FineTune=False # SHould we fine tune activity after post-processing? (mainly after merging)
     IncludeBackground=False #should we include the background as an extracted component?
     
     # how to plot
@@ -86,7 +96,7 @@ def PlotAll(SaveNames,params):
         video_shapes=False
         video_residual=False
         video_slices=False
-        print '2D data, ignoring 3D plots/video options'
+        print('2D data, ignoring 3D plots/video options')
     else:
         plot_Shapes2D=False
         video_residual_2D=False
@@ -102,7 +112,7 @@ def PlotAll(SaveNames,params):
             results=load('NMF_Results/'+SaveNames[rep])
         except IOError:
             if rep==0:
-                print 'results file not found!!'              
+                print('results file not found!!')              
             else:
                 break            
         SS=results['shapes']
@@ -149,20 +159,15 @@ def PlotAll(SaveNames,params):
     
     activity_NonNegative=np.copy(activity)
     activity_NonNegative[activity_NonNegative<0]=0
+    activity_noisy=np.copy(activity_NonNegative)
     if FineTune==True:
-#        activity=HALS4activity(data.reshape((np.shape(data)[0],-1)), shapes.reshape((len(shapes),-1)), activity,params.NonNegative,lam1_t=0,lam2_t=0,iters=30)
-#        options=CNMFSetParms(data, n_processes=1,p=1)
-#        options['preprocess_params']['noise_range']=[0.1,0.5]
-
-#        g_calcium=(1-1/30)*np.ones((len(activity),1)) #Jake's Guess - add g=g_calcium to update_temporal_components inputs to fix AR constants
-#        if params.Background_num<=1: #the constrained foopsi code does not work with more than one background component
         for ll in range(L):
             activity[ll], spikes, baseline, g, lam = deconvolve(activity_NonNegative[ll],optimize_g=10,penalty=0)
 #            activity,background_activity,S,bl,c1,sn,g,junk = update_temporal_components(data.reshape((len(data),-1)).transpose(), shapes.reshape((len(shapes),-1)).transpose(), background_shapes.reshape((len(background_shapes),-1)).transpose(), activity,background_activity,**options['temporal_params'])
         activity_noisy=np.copy(activity_NonNegative)
         activity_NonNegative=activity
     
-    print str(L)+' shapes detected'
+    print(str(L)+' shapes detected')
     
     detrended_data= detrended_data - background_activity.T.dot(background_shapes.reshape((len(background_shapes), -1))).reshape(dims)        
 
@@ -181,7 +186,7 @@ def PlotAll(SaveNames,params):
 #%% After loading loop - Normalize (colored) denoised data
     if plot_residual_projections or video_shapes or video_residual or video_slices or video_residual_2D:
 #       denoised_data=denoised_data/np.max(denoised_data)
-       denoised_data=denoised_data/np.percentile(denoised_data[denoised_data>0],99.5)  #%% normalize denoised data range
+       denoised_data=old_div(denoised_data,np.percentile(denoised_data[denoised_data>0],99.5))  #%% normalize denoised data range
        denoised_data[denoised_data>1]=1           
     
     #    plt.close('all')
@@ -215,7 +220,7 @@ def PlotAll(SaveNames,params):
                  fig0=plt.figure(figsize=(11,18))
             ax = plt.subplot(a,b,index+1)
 #            dt=1/30 # 30 Hz sample rate
-            time=range(len(activity[ii]))
+            time=list(range(len(activity[ii])))
             plt.plot(time,activity_noisy[ii],linewidth=0.5,c='r')
             plt.plot(time,activity[ii],linewidth=3,c='b')
             ma=np.max([np.max(activity[ii]),np.max(activity_noisy[ii])])            
@@ -239,7 +244,7 @@ def PlotAll(SaveNames,params):
     index=0 #component display index
     sz=np.min([ComponentsInFig,L+adaptBias])
     a=ceil(sqrt(sz))  
-    b=ceil(sz/a)  
+    b=ceil(old_div(sz,a))  
     
     if plot_activities_PSD:
         pp = PdfPages(Results_folder + 'ActivityPSDs'+resultsName+'.pdf')        
@@ -248,7 +253,7 @@ def PlotAll(SaveNames,params):
 #                fig0=plt.figure(figsize=(dims[1] , dims[2]))
                  fig0=plt.figure(figsize=(11,18))
             ax = plt.subplot(a,b,index+1)
-            ff, psd_activity = welch(activity[ii], nperseg=round(len(activity[ii]) / 64))
+            ff, psd_activity = welch(activity[ii], nperseg=round(old_div(len(activity[ii]), 64)))
             plt.plot(ff,psd_activity,linewidth=3)
             plt.setp(ax, xticks=[],yticks=[0])
             # component number
@@ -273,7 +278,7 @@ def PlotAll(SaveNames,params):
     index=0 #component display index
     sz=np.min([ComponentsInFig,L+adaptBias])
     a=ceil(0.5*sqrt(sz))  
-    b=ceil(sz/a)  
+    b=ceil(old_div(sz,a))  
     
     if plot_Shapes2D:            
         if save_plot==True:
@@ -292,7 +297,7 @@ def PlotAll(SaveNames,params):
             plt.setp(ax,xticks=[],yticks=[])
             mn=int(np.floor(mi))        # colorbar min value
             mx=int(np.ceil(ma))         # colorbar max value
-            md=(mx-mn)/2
+            md=old_div((mx-mn),2)
 #                divider = make_axes_locatable(ax)
 #                cax = divider.append_axes("right", size="5%", pad=0.05)
 #                cb=plt.colorbar(im,cax=cax)
@@ -312,7 +317,7 @@ def PlotAll(SaveNames,params):
             color='white',weight='bold', fontsize=13)
             #L^p
             for p in range(2,6,2):
-                Lp=(np.sum(shapes[ll]**p))**(1/float(p))/np.sum(shapes[ll])
+                Lp=old_div((np.sum(shapes[ll]**p))**(old_div(1,float(p))),np.sum(shapes[ll]))
                 Lp_str=str(np.round(Lp*100,2))+'%' #'L'+str(p)+'='+
                 ax.text(0.02+p*0.2, 0.02, Lp_str,
                 verticalalignment='bottom', horizontalalignment='left',
@@ -331,7 +336,7 @@ def PlotAll(SaveNames,params):
     #%% Re-write plot code from here, so that each figure has only ComponentsInFig components         
     #%% ###### Plot Individual neurons' area which is correlated with their activities
     a=ceil(sqrt(L+adaptBias))
-    b=ceil((L+adaptBias)/a)
+    b=ceil(old_div((L+adaptBias),a))
     
     if plot_activityCorrs:
         if save_plot==True:
@@ -341,7 +346,7 @@ def PlotAll(SaveNames,params):
     
             for ii in range(L+adaptBias):
                 ax = plt.subplot(a,b,ii+1)
-                corr_imag=np.dot(activity[ii],np.transpose(data,[1,2,0,3]))/np.sqrt(np.sum(data**2,axis=0)*np.sum(activity[ii]**2))
+                corr_imag=old_div(np.dot(activity[ii],np.transpose(data,[1,2,0,3])),np.sqrt(np.sum(data**2,axis=0)*np.sum(activity[ii]**2)))
                 plt.imshow(np.abs(corr_imag).max(dd),cmap=color_map)
                 plt.setp(ax,xticks=[],yticks=[])
             plt.subplots_adjust(left, bottom, right, top, wspace, hspace)
@@ -354,7 +359,7 @@ def PlotAll(SaveNames,params):
 
     #%%  All Shapes projections
     a=ceil(sqrt(L+adaptBias))
-    b=ceil((L+adaptBias)/a)
+    b=ceil(old_div((L+adaptBias),a))
 
     if plot_shapes_projections:
         if save_plot==True:
@@ -373,7 +378,7 @@ def PlotAll(SaveNames,params):
                 plt.setp(ax,xticks=[],yticks=[])
                 mn=int(np.floor(mi))        # colorbar min value
                 mx=int(np.ceil(ma))         # colorbar max value
-                md=(mx-mn)/2
+                md=old_div((mx-mn),2)
                 divider = make_axes_locatable(ax)
                 cax = divider.append_axes("right", size="5%", pad=0.05)
                 cb=plt.colorbar(im,cax=cax)
@@ -415,7 +420,7 @@ def PlotAll(SaveNames,params):
     ComponentsInFig=3 # number of components in Figure
     index=0 #component display index
 #        z_slices=[0,1,2,3,4,5,6,7,8] #which z slices to look at slice plots/videos
-    z_slices=range(dims[min_dim+1]) #which z slices to look at slice plots/videos
+    z_slices=list(range(dims[min_dim+1])) #which z slices to look at slice plots/videos
     
     if plot_shapes_slices:            
         if save_plot==True:
@@ -448,7 +453,7 @@ def PlotAll(SaveNames,params):
                     color='white',weight='bold', fontsize=13)
                     mn=int(np.floor(mi))        # colorbar min value
                     mx=int(np.ceil(ma))         # colorbar max value
-                    md=(mx-mn)/2
+                    md=old_div((mx-mn),2)
                     divider = make_axes_locatable(ax)
                     cax = divider.append_axes("bottom", size="5%", pad=0.05)
                     cb=plt.colorbar(im,cax=cax,orientation="horizontal")
@@ -456,7 +461,7 @@ def PlotAll(SaveNames,params):
                     cb.set_ticklabels([mn,md,mx])
                     #L^p
                     for p in range(2,2,2):
-                        Lp=(np.sum(shapes[ll]**p))**(1/float(p))/np.sum(shapes[ll])
+                        Lp=old_div((np.sum(shapes[ll]**p))**(old_div(1,float(p))),np.sum(shapes[ll]))
                         Lp_str=str(np.round(Lp*100,2))+'%' #'L'+str(p)+'='+
                         ax.text(0.02+p*0.15, 0.02, Lp_str,
                         verticalalignment='bottom', horizontalalignment='left',
@@ -478,7 +483,7 @@ def PlotAll(SaveNames,params):
             
     #%% ###### Plot Individual neurons' shape projection with clustering
     a=ceil(sqrt(L+adaptBias))
-    b=ceil((L+adaptBias)/a)
+    b=ceil(old_div((L+adaptBias),a))
     
     if plot_clustered_shape:
         from sklearn.cluster import spectral_clustering
@@ -491,7 +496,7 @@ def PlotAll(SaveNames,params):
             temp=data[np.repeat(ind,dims[0],axis=0)].reshape(dims[0],-1)
             delta=1 #affinity trasnformation parameter
             clust=3 #number of cluster
-            similarity=np.exp(-np.corrcoef(temp.T)/delta)                    
+            similarity=np.exp(old_div(-np.corrcoef(temp.T),delta))                    
             labels = spectral_clustering(similarity, n_clusters=clust, eigen_solver='arpack')
             ind2=np.array(np.nonzero(ind.reshape(-1))).reshape(-1)
             temp_shape=np.repeat(np.zeros_like(shapes[ll]).reshape(-1,1),clust,axis=1)
@@ -521,7 +526,7 @@ def PlotAll(SaveNames,params):
 
     #%% #####  Video Shapes
     if video_shapes:
-        components=range(min(asarray([C,L])))
+        components=list(range(min(asarray([C,L]))))
         C=len(components)
         if restrict_support==True:
             shape_support=shapes[components[0]]>0            
@@ -711,7 +716,7 @@ def PlotAll(SaveNames,params):
     
      #%% ##### Plot denoised slices - Results
 #    z_slices=[0,2,4,6,8] #which z slices to look at slice plots/videos
-    z_slices=range(dims[min_dim+1]) #which z slices to look at slice plots/videos
+    z_slices=list(range(dims[min_dim+1])) #which z slices to look at slice plots/videos
     D=len(z_slices)
     if plot_residual_slices==True:
         
@@ -769,7 +774,7 @@ def PlotAll(SaveNames,params):
         mi = 0
         ma = np.percentile(data,satuartion_percentile)
         mi3 = 0
-        ma3 = ma/np.max([np.floor(ma/np.percentile(residual[residual>0],satuartion_percentile)),1])
+        ma3 = old_div(ma,np.max([np.floor(old_div(ma,np.percentile(residual[residual>0],satuartion_percentile))),1]))
 
         ii=0
         #import colormaps as cmaps
@@ -804,7 +809,7 @@ def PlotAll(SaveNames,params):
         ax3 = plt.subplot(a,b,3)            
         pic=residual[ii]   
         im_array += [ax3.imshow(pic, vmin=mi3, vmax=ma3,cmap=cmap)]
-        ax3.set_title('Residual x' + '%.1f' % (ma/ma3))
+        ax3.set_title('Residual x' + '%.1f' % (old_div(ma,ma3)))
         plt.setp(ax3,xticks=[],yticks=[])
         divider = make_axes_locatable(ax3)
         cax3 = divider.append_axes("right", size="5%", pad=0.05)
@@ -820,7 +825,7 @@ def PlotAll(SaveNames,params):
             im_array[2].set_data(residual[ii])                     
             
             if frame_rate!=[]:
-                title.set_text('Data, time = %.2f sec' % (ii/frame_rate))
+                title.set_text('Data, time = %.2f sec' % (old_div(ii,frame_rate)))
             else:
                 title.set_text('Data, time = %.1f' % ii)
         
@@ -845,7 +850,7 @@ def PlotAll(SaveNames,params):
         #cmap=cmaps.viridis
         cmap=color_map
         
-        spatial_dims_ind=range(len(dims)-1)
+        spatial_dims_ind=list(range(len(dims)-1))
         D=len(spatial_dims_ind)
         a=D
         b=3
@@ -916,7 +921,7 @@ def PlotAll(SaveNames,params):
             
     #%% #####  Video Slices Residual    
 #    z_slices=[0,2,4,6,8] #which z slices to look at slice plots/videos    
-    z_slices=range(dims[min_dim+1]) #which z slices to look at slice plots/videos
+    z_slices=list(range(dims[min_dim+1])) #which z slices to look at slice plots/videos
     
     if video_slices:
         fig = plt.figure(figsize=(16,7))
