@@ -4,7 +4,7 @@ Installation:
 Requires Python 2.7 and 3.5.
 Download to folder.
 Download and install OASIS (together with its dependencies) from here: https://github.com/j-friedrich/OASIS and add as a subfolder.
-Additional dependencies: all the WinPython libraries, tifffile,... and maybe more.
+Additional dependencies: all the WinPython libraries, tifffile... and maybe more.
 
 Main files:
 
