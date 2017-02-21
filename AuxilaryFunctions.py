@@ -63,19 +63,20 @@ def max_intensity(x,axis): #get the pixel with maximum total intensity in a colo
     
 def GetDataFolder():
     
-    DataFolder='G:/BackupFolder/'
+#   DataFolder='G:/BackupFolder/'
+
         
-#    import os
-#    
-#    if os.getcwdu()[0]=='C':
-#        DataFolder='G:/BackupFolder/'
-#    else:
-#        DataFolder='Data/'
-        
+    import os
+    
+    if os.getcwdu()[0]=='C':
+        DataFolder='G:/BackupFolder/'
+    else:
+        DataFolder='Data/'
+    
     make_sure_path_exists(DataFolder)
-    
+
     return DataFolder
-    
+
     
 def GetData(data_name):
     
@@ -181,6 +182,17 @@ def GetData(data_name):
         ds=3  
         data=data[:int(old_div(len(data), ds)) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+    elif data_name=='YairDendrites':  
+        img= tff.TiffFile( DataFolder +'YairDendrites\stable_7_ds_23.tif')
+#        img= tff.TiffFile('C:/Users/Daniel/Desktop/YairDendrites/stable_7.tif')        
+        data=img.asarray()
+        data=np.asarray(data,dtype='float')  
+#        data=np.transpose(data, [2,0,1]) 
+#        data=data[:,1:300,1:300]
+        ds=1  
+        data=data[:int(old_div(len(data), ds)) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
+        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+
       
     else:
         print('unknown dataset name!')
@@ -315,13 +327,14 @@ from scipy.sparse.csgraph import connected_components
 from collections import defaultdict
 from scipy.ndimage.filters import gaussian_filter
 
-def MergeComponents(shapes,activity,L,threshold,sig):
+def MergeComponents(shapes,activity,L,threshold_activity,threshold_shape,sig):
     # merge nearby components (with spatial components within sig of each other), and high (>threshold) spatial or temporal correlation
     # Inputs:
     # shapes - numpy array with all shape components - size (L,X,Y(,Z)) 
     # activity - numpy array with all activity components - size (L,T)
     # L - int, number of background components.
-    # threshold - float, cutoff for merging
+    # threshold_shape - float, cutoff for merging component by shape
+    # threshold_activity - float, cutoff for merging component by activity
     # sig - float, cutoff of spatial proximity
     # Outputs:  
     # shapes - numpy array with all shape components - size (L,X,Y(,Z)) 
@@ -352,7 +365,7 @@ def MergeComponents(shapes,activity,L,threshold,sig):
     shape_vars=np.diag(shapes_cov).reshape(-1,1)
     shapes_corr=np.nan_to_num(old_div(shapes_cov,np.sqrt(np.dot(shape_vars,shape_vars.T))))
 
-    merge_ind=(activity_corr>threshold)|(shapes_corr>threshold)
+    merge_ind=(activity_corr>threshold_activity)|(shapes_corr>threshold_shape)
     merge_ind[nearby_shapes==0]=0
     num,labels=connected_components(merge_ind)
     

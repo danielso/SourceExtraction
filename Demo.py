@@ -15,18 +15,24 @@ abspath = os.path.abspath(__file__)
 dname = os.path.dirname(abspath)
 os.chdir(dname)
 
+
+class Bunch(object):
+    def __init__(self, adict):
+        self.__dict__.update(adict)
+
+
 def GetDefaultParams():
     # Get parameters for: Data type, NMF algorithm and intialization
     
     # choose dataset name (function GetData will use this to fetch the correct dataset)
     data_name_set=['Hillman','HillmanSmall','Sophie2D','Sophie3D','SophieVoltage3D','Sophie3DSmall',
     'SaraSmall','Sara19DEC2015_w1t1','PhilConfocal','PhilMFM','PhilConfocal2','BaylorAxonsSmall',
-    'BaylorAxons','BaylorAxonsQuiet','BaylorAxonsActive','BaylorAxonsJiakun1','BaylorAxonsJiakun2','Ja_Ni_ds3']
-    data_name=data_name_set[-5]
+    'BaylorAxons','BaylorAxonsQuiet','BaylorAxonsActive','BaylorAxonsJiakun1','BaylorAxonsJiakun2','Ja_Ni_ds3','YairDendrites']
+    data_name=data_name_set[-6]
     
     # "default" parameters - for additional information see "LocalNMF" function in BlockLocalNMF
     
-    NumCent=1 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+    NumCent=0 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
     mbs=[1] # temporal downsampling of data in intial phase of NMF
     ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
     TargetAreaRatio=[0.005,0.05] # target sparsity range for spatial components - low
@@ -38,16 +44,17 @@ def GetDefaultParams():
     addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
     updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
     Background_num=1 #number of background components - one of which at every repetion
-    bkg_per=0.2 # intialize of background shape at this percentile (over time) of video
+    bkg_per=0.2 # intialize of background shape at this percentile (over time) of video, in the range [0,100]
     sig=(500,500,500) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
-    SigmaMask=[]    # if not [], then update masks so that they are SigmaMasks around non-zero support of shapes
-    
+    SigmaMask=[]    # if not [], then update masks so that they are non-zero a radius of SigmaMasks around previous non-zero support of shapes
+    MergeThreshold_activity=1#merge components if activity is correlated above the this threshold (and sufficiently close)
+    MergeThreshold_shapes=1 #merge components if activity is correlated above the this threshold (and sufficiently close)
     
     NonNegative=True # should we constrain activity and shapes to be non-negative?
     FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
     Connected=False # should we constrain all spatial component to be connected?
     WaterShed=False # should we constrain all spatial component to have only one watershed component?
-    MedianFilt=False # should we perfrom median filtering of shape?
+    MedianFilt=False 
     FineTune=True # Should use the full data at the main iterations (to fine tune shapes)? If not then just extract the activity and not the shapes from the full data
     Deconvolve=False #Deconvolve activity to get smoothed (denoised) calcium trace
     
@@ -227,6 +234,8 @@ def GetDefaultParams():
         Background_num=1 #number of background components - one of which at every repetion
         bkg_per=0.1 # intialize of background shape at this percentile (over time) of video
         sig=(200,200) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
+        MergeThreshold_activity=0.7#merge components if activity is correlated above the this threshold (and sufficiently close)
+        MergeThreshold_shapes=0.7 #merge components if activity is correlated above the this threshold (and sufficiently close)        
         
         ThresholdData= False  # threshold data with PSD level
         FineTune=False
@@ -307,6 +316,28 @@ def GetDefaultParams():
         Connected=True # should we constrain all spatial component to be connected?
         WaterShed=False # should we constrain all spatial component to have only one watershed component?        
         SigmaMask=3 
+    elif data_name=='YairDendrites' :
+        NumCent=100 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+        mbs=[1] # temporal downsampling of data in intial phase of NMF
+        ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
+        TargetAreaRatio=[0.001,0.03] # target sparsity range for spatial components
+        repeats=1 # how many repeations to run NMF algorithm
+        iters0=[1] # number of intial NMF iterations, in which we downsample data and add components
+        iters=100 # number of main NMF iterations, in which we fine tune the components on the full data
+        lam1_s=10# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
+        updateLambdaIntervals=2 # update sparsity parameter every updateLambdaIntervals iterations
+        addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
+        updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
+        Background_num=1 #number of background components - one of which at every repetion
+        bkg_per=0.05 # intialize of background shape at this percentile (over time) of video
+        sig=(5,5) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
+        
+        FineTune=False
+        NonNegative=True # should we constrain activity and shapes to be non-negative?
+        FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
+        Connected=True # should we constrain all spatial component to be connected?
+        WaterShed=False # should we constrain all spatial component to have only one watershed component?        
+        SigmaMask=3 
         
         
         
@@ -317,10 +348,8 @@ def GetDefaultParams():
                      ['updateLambdaIntervals',updateLambdaIntervals],['updateRhoIntervals',updateRhoIntervals],['addComponentsIntervals',addComponentsIntervals],
                      ['estimateNoise',estimateNoise],['PositiveError',PositiveError],['sig',sig],['NumCent',NumCent],['SigmaBlur',SigmaBlur],
                     ['bkg_per',bkg_per],['ds',ds],['sig',sig],['Background_num',Background_num],['Connected',Connected],['WaterShed',WaterShed],
-                    ['SmoothBackground',SmoothBackground],['FixSupport',FixSupport],['repeats',repeats],['ThresholdData',ThresholdData]])
-    class Bunch(object):
-        def __init__(self, adict):
-            self.__dict__.update(adict)
+                    ['SmoothBackground',SmoothBackground],['FixSupport',FixSupport],['repeats',repeats],['ThresholdData',ThresholdData],
+                    ['MergeThreshold_shapes',MergeThreshold_shapes],['MergeThreshold_activity',MergeThreshold_activity]    ])
 
     params=Bunch(params_dict)
     
@@ -336,7 +365,7 @@ if __name__ == "__main__":
     import numpy as np
     from BlockLocalNMF import LocalNMF
     import matplotlib.pyplot as plt
-    from AuxilaryFunctions import GetFileName,SuperVoxelize,GetData,GetCentersData,ThresholdData,make_sure_path_exists,GetDataFolder
+    from AuxilaryFunctions import GetFileName,SuperVoxelize,GetData,GetCentersData,ThresholdData,make_sure_path_exists
     import pickle 
     
     plt.close('all')
@@ -375,8 +404,8 @@ if __name__ == "__main__":
             MSE_array, shapes, activity = LocalNMF(
                 data, cent, params.sig,TargetAreaRatio=params.TargetAreaRatio,updateLambdaIntervals=params.updateLambdaIntervals,addComponentsIntervals=params.addComponentsIntervals,
                 WaterShed=params.WaterShed,SigmaMask=params.SigmaMask,PositiveError=params.PositiveError,NonNegative=params.NonNegative,Deconvolve=params.Deconvolve,
-                FinalNonNegative=params.FinalNonNegative,MedianFilt=params.MedianFilt,verbose=True,lam1_s=params.lam1_s,
-                adaptBias=adaptBias,estimateNoise=params.estimateNoise,FineTune=params.FineTune,SigmaBlur=params.SigmaBlur,
+                FinalNonNegative=params.FinalNonNegative,MedianFilt=params.MedianFilt,verbose=True,lam1_s=params.lam1_s,MergeThreshold_activity=params.MergeThreshold_activity,
+                adaptBias=adaptBias,estimateNoise=params.estimateNoise,FineTune=params.FineTune,SigmaBlur=params.SigmaBlur,MergeThreshold_shapes=params.MergeThreshold_shapes,
                 Connected=params.Connected,SmoothBkg=params.SmoothBackground,FixSupport=params.FixSupport,bkg_per=params.bkg_per,iters0=params.iters0,iters=params.iters,mbs=params.mbs, ds=params.ds)
             
             # save results to file

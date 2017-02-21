@@ -21,7 +21,7 @@ from functions import deconvolve
 
 def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=False,adaptBias=True,TargetAreaRatio=[],estimateNoise=False,
              PositiveError=False,MedianFilt=False,Connected=False,FixSupport=False, WaterShed=False,SmoothBkg=False,FineTune=True,Deconvolve=False,
-             SigmaMask=[],updateLambdaIntervals=2,updateRhoIntervals=2,addComponentsIntervals=1,bkg_per=20,SigmaBlur=[],
+             SigmaMask=[],updateLambdaIntervals=2,updateRhoIntervals=2,addComponentsIntervals=1,bkg_per=20,SigmaBlur=[],MergeThreshold_activity=1,MergeThreshold_shapes=1,
              iters=10,iters0=[30], mbs=[1], ds=1,lam1_s=0,lam1_t=0,lam2_s=0,lam2_t=0):
     """
     Parameters
@@ -61,7 +61,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
     Deconvolve : boolean
         Deconvolve activity to get smoothed (denoised) calcium trace. This is done only on the main itreations, and if FineTune=True
     SigmaMask : scalar or empty
-        if not [], then update masks so that they are SigmaMasks around non-zero support of shapes
+        if not [], then update masks so that they are non-zero a radius of SigmaMasks around previous non-zero support of shapes
     SigmaBlur : scalar
         if not [], then de-blur spatial components using Gaussian Kernel of this width
     updateLambdaIntervals : int
@@ -70,7 +70,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         decrease rho, update rate of lam1_s, every this number of updateLambdaIntervals HALS iterations (only active during main iterations)
     addComponentsIntervals : int
         add new component, if possible, every this number of updateLambdaIntervals HALS iterations (only active during sub-sampled iterations)
-    bkg_per : float
+    bkg_per : float in the range [0,100]
         the background is intialized at this height (percentrilce image)
     iters : int
         number of final iterations on whole data
@@ -88,7 +88,11 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         L_1 regularization constant for sparsity of activity
     lam2_t : float
         L_2 regularization constant for sparsity of activity
-
+    MergeThreshold_activity: float between 0 and 1
+        merge components if activity is correlated above the this threshold (and sufficiently close)
+    MergeThreshold_shapes: float between 0 and 1
+        merge components if shapes are correlated above the this threshold (and sufficiently close)
+        
     Returns
     -------
     MSE_array : list (empty if verbose is False)
@@ -273,7 +277,8 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
 
     ### Stop adding components ###
         if L==0: #if no non-background components found, return empty arrays
-            return [], [], [], []
+            print('No non-background components found, aborting...')
+            return [], [], []
         
         if FineTune: ### Upscale Back to full data ##
             activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1)
@@ -400,7 +405,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
     S=S.reshape((-1,) + dims[1:])
     S,activity,L=PruneComponents(S,activity,L) #prune "bad" components
     if len(S)>1:
-        S,activity,L=MergeComponents(S,activity,L,threshold=0.9,sig=10)    #merge very similar components
+        S,activity,L=MergeComponents(S,activity,L,threshold_activity=MergeThreshold_activity,threshold_shape=MergeThreshold_shapes,sig=10)    #merge very similar components
         if not FineTune:
             activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1) #extract activity from full data
         activity=HALS4activity(data, S.reshape((len(S),-1)), activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,iters=30)
