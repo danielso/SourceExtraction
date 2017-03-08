@@ -225,11 +225,9 @@ def GetCentersData(data,NumCent,data_name=[],rep=0):
     import os
     import pickle
         
-    
-    DataFolder=GetDataFolder()    
-
-    center_file_name=DataFolder + '/centers_'+ str(data_name) + '_rep_' + str(rep)
     if NumCent>0:
+        DataFolder=GetDataFolder()    
+        center_file_name=DataFolder + '/centers_'+ str(data_name) + '_rep_' + str(rep)
         if data_name==[] or os.path.isfile(center_file_name)==False:
             if data.ndim==3:
                 sig0=(2,2)
@@ -332,14 +330,14 @@ def MergeComponents(shapes,activity,L,threshold_activity,threshold_shape,sig):
     # Inputs:
     # shapes - numpy array with all shape components - size (L,X,Y(,Z)) 
     # activity - numpy array with all activity components - size (L,T)
-    # L - int, number of background components.
+    # L - int, number of non-background components.
     # threshold_shape - float, cutoff for merging component by shape
     # threshold_activity - float, cutoff for merging component by activity
     # sig - float, cutoff of spatial proximity
     # Outputs:  
     # shapes - numpy array with all shape components - size (L,X,Y(,Z)) 
     # activity - numpy array with all activity components - size (L,T)
-    # L - int, number of background components.
+
    
     if len(shapes)==0:
        return shapes,activity,L

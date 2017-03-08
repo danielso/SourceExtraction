@@ -234,8 +234,8 @@ def GetDefaultParams():
         Background_num=1 #number of background components - one of which at every repetion
         bkg_per=0.1 # intialize of background shape at this percentile (over time) of video
         sig=(200,200) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
-        MergeThreshold_activity=0.7#merge components if activity is correlated above the this threshold (and sufficiently close)
-        MergeThreshold_shapes=0.7 #merge components if activity is correlated above the this threshold (and sufficiently close)        
+        MergeThreshold_activity=0.85#merge components if activity is correlated above the this threshold (and sufficiently close)
+        MergeThreshold_shapes=0.99 #merge components if activity is correlated above the this threshold (and sufficiently close)        
         
         ThresholdData= False  # threshold data with PSD level
         FineTune=False

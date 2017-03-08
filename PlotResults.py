@@ -55,7 +55,7 @@ def PlotAll(SaveNames,params):
     Split=False   
     Threshold=False   #threshold shapes in the end and keep only connected components
     Prune=False  # Remove "Bad" components (where bad is defined within SplitComponent fucntion)
-    Merge=True # Merge highly correlated nearby components
+    Merge=False # Merge highly correlated nearby components
     FineTune=True # SHould we fine tune activity after post-processing? (mainly after merging)
     IncludeBackground=False #should we include the background as an extracted component?
     
@@ -152,7 +152,7 @@ def PlotAll(SaveNames,params):
         shapes,activity,L,all_local_max=SplitComponents(shapes,activity,adaptBias)   
     
     if Merge==True:
-        shapes,activity,L=MergeComponents(shapes,activity,L,threshold_activity=0.7,threshold_shape=0.7,sig=10)
+        shapes,activity,L=MergeComponents(shapes,activity,L,threshold_activity=0.8,threshold_shape=0.99,sig=10)
         
     if Prune==True:
 #           deleted_indices=[5,9,11,14,15,17,24]+range(25,36)
