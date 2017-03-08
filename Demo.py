@@ -28,7 +28,7 @@ def GetDefaultParams():
     data_name_set=['Hillman','HillmanSmall','Sophie2D','Sophie3D','SophieVoltage3D','Sophie3DSmall',
     'SaraSmall','Sara19DEC2015_w1t1','PhilConfocal','PhilMFM','PhilConfocal2','BaylorAxonsSmall',
     'BaylorAxons','BaylorAxonsQuiet','BaylorAxonsActive','BaylorAxonsJiakun1','BaylorAxonsJiakun2','Ja_Ni_ds3','YairDendrites']
-    data_name=data_name_set[-6]
+    data_name=data_name_set[-1]
     
     # "default" parameters - for additional information see "LocalNMF" function in BlockLocalNMF
     
@@ -47,8 +47,8 @@ def GetDefaultParams():
     bkg_per=0.2 # intialize of background shape at this percentile (over time) of video, in the range [0,100]
     sig=(500,500,500) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
     SigmaMask=[]    # if not [], then update masks so that they are non-zero a radius of SigmaMasks around previous non-zero support of shapes
-    MergeThreshold_activity=1#merge components if activity is correlated above the this threshold (and sufficiently close)
-    MergeThreshold_shapes=1 #merge components if activity is correlated above the this threshold (and sufficiently close)
+    MergeThreshold_activity=0.95#merge components if activity is correlated above the this threshold (and sufficiently close)
+    MergeThreshold_shapes=0.99 #merge components if activity is correlated above the this threshold (and sufficiently close)
     
     NonNegative=True # should we constrain activity and shapes to be non-negative?
     FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
@@ -331,7 +331,7 @@ def GetDefaultParams():
         Background_num=1 #number of background components - one of which at every repetion
         bkg_per=0.05 # intialize of background shape at this percentile (over time) of video
         sig=(5,5) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
-        
+         
         FineTune=False
         NonNegative=True # should we constrain activity and shapes to be non-negative?
         FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
@@ -349,7 +349,7 @@ def GetDefaultParams():
                      ['estimateNoise',estimateNoise],['PositiveError',PositiveError],['sig',sig],['NumCent',NumCent],['SigmaBlur',SigmaBlur],
                     ['bkg_per',bkg_per],['ds',ds],['sig',sig],['Background_num',Background_num],['Connected',Connected],['WaterShed',WaterShed],
                     ['SmoothBackground',SmoothBackground],['FixSupport',FixSupport],['repeats',repeats],['ThresholdData',ThresholdData],
-                    ['MergeThreshold_shapes',MergeThreshold_shapes],['MergeThreshold_activity',MergeThreshold_activity]    ])
+                    ['MergeThreshold_shapes',MergeThreshold_shapes],['MergeThreshold_activity',MergeThreshold_activity]])
 
     params=Bunch(params_dict)
     
