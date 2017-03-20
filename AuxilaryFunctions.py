@@ -15,7 +15,7 @@ from builtins import str
 from builtins import range
 from past.utils import old_div
 import numpy as np
-
+import os
 
 def make_sure_path_exists(path):
     import os
@@ -68,7 +68,7 @@ def GetDataFolder():
         
     import os
     
-    if os.getcwdu()[0]=='C':
+    if os.getcwd()[0]=='C':
         DataFolder='G:/BackupFolder/'
     else:
         DataFolder='Data/'
@@ -148,11 +148,13 @@ def GetData(data_name):
         data=np.asarray(data,dtype='float')  
         data=data[:,:200,:200] #take only a small patch
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
-    elif data_name=='BaylorAxonsQuiet':           
-        temp=h5py.File(DataFolder + 'BaylorV1Axons/quietBlock.mat')
-        data=temp["quietBlock"]
-        data=np.asarray(data,dtype='float')  
-        data=data[:,150:350,150:350] #take only a small patch
+    elif data_name=='BaylorAxonsQuiet':   
+    
+        with h5py.File(os.path.join(DataFolder,u'BaylorV1Axons/quietBlock.mat')) as temp:
+
+            data=temp["quietBlock"]
+            data=np.asarray(data,dtype='float')  
+            data=data[:,150:350,150:350] #take only a small patch
 #        ds=3  #downscale time by this factor
 #        data=data[:int(len(data) / ds) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
