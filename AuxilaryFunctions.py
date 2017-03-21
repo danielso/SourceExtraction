@@ -71,9 +71,7 @@ def GetDataFolder():
     if os.getcwdu()[0]=='C':
         DataFolder='G:/BackupFolder/'
     else:
-        DataFolder='Data/'
-    
-    make_sure_path_exists(DataFolder)
+        DataFolder='Data/'    
 
     return DataFolder
 
@@ -90,6 +88,8 @@ def GetData(data_name):
 
     
     DataFolder=GetDataFolder()
+    
+    make_sure_path_exists(DataFolder)
     
     # Fetch experimental 3D data     
     if data_name=='HillmanSmall':
@@ -192,13 +192,18 @@ def GetData(data_name):
         ds=1  
         data=data[:int(old_div(len(data), ds)) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
-
-      
+    elif data_name=='FISSEQ_MIT':  
+        img= tff.TiffFile( DataFolder + 'FISSEQ_MIT/raw_no_markers_no_background.tif')       
+        data=img.asarray()
+        data=np.asarray(data,dtype='float')  
+        orig_dims=data.shape
+        data=np.reshape(data,(-1,orig_dims[-2],orig_dims[-1]))        
+        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel      
     else:
         print('unknown dataset name!')
     return data
     
-def GetCentersData(data,NumCent,data_name=[],rep=0): 
+def GetCentersData(data,NumCent,data_name=[],rep=0,mbs=50): 
     """
     Get intialization centers using group lasso
     
@@ -212,11 +217,13 @@ def GetCentersData(data,NumCent,data_name=[],rep=0):
         number centers to extract
     rep: integer
         repetition number
+    mbs: integer
+        minibatch size for temporal downsampling 
         
     Output
     ----------
-    activity: array, shape (L,T)
-        extracted temporal components
+    cent: array, shape (L,2(3))
+        ecenters of spatial components
     
     """
     from numpy import  array,percentile    
@@ -235,11 +242,10 @@ def GetCentersData(data,NumCent,data_name=[],rep=0):
                 sig0=(2,2,2)
                 
             TargetRange = [0.1, 0.2]    
-            lam = 500
-            ds= 50 #downscale time for group lasso        
+            lam = 500      
             NonNegative=True
     
-            downscaled_data=data[:int(old_div(len(data), ds)) * ds].reshape((-1, ds) + data.shape[1:]).max(1) #for speed ups
+            downscaled_data=data[:int(old_div(len(data), mbs)) * mbs].reshape((-1, mbs) + data.shape[1:]).max(1) #for speed ups
             x = gaussian_group_lasso(downscaled_data, sig0, lam,NonNegative=NonNegative, TargetAreaRatio=TargetRange, verbose=True, adaptBias=False)
             pic_x = percentile(x, 95, axis=0)
 
@@ -278,11 +284,13 @@ def GetCentersData(data,NumCent,data_name=[],rep=0):
             if data_name!=[]:
                 cent=load(center_file_name)
                 
-        new_cent=(array(cent)[:-1]).T                
+        new_cent=(array(cent)[:-1]).T             
         new_cent=new_cent[:NumCent] #just give strongest centers
     else:
         new_cent=np.reshape([],(0,data.ndim-1))
         
+    new_cent=new_cent.astype('int')   
+    
     return new_cent
     
     
@@ -407,6 +415,7 @@ def PruneComponents(shapes,activity,L,TargetAreaRatio=[],deleted_indices=[]):
         # If sparsity is too high or too low        
         cond1=0
         cond2=0
+        print(L)
         for ll in range(L):
             S_normalization=np.sum(shapes[ll])
             A_normalization=np.sum(activity[ll])
@@ -415,8 +424,8 @@ def PruneComponents(shapes,activity,L,TargetAreaRatio=[],deleted_indices=[]):
             else:
                 cond0=False
             if TargetAreaRatio!=[]:
-                cond1=np.mean(shapes[ll]>0)<TargetAreaRatio[0]
-                cond2=np.mean(shapes[ll]>0)>(TargetAreaRatio[1]*3)
+                cond1=np.mean(shapes[ll]>0)<0.001 #TargetAreaRatio[0]
+                cond2=np.mean(shapes[ll]>0)>0.99#(TargetAreaRatio[1]*3)
             if cond0 or cond1 or cond2:
                 deleted_indices.append(ll) 
             
@@ -427,7 +436,7 @@ def PruneComponents(shapes,activity,L,TargetAreaRatio=[],deleted_indices=[]):
         # constraint on L2 of shape?
         
         # constraint on Euler number?
-
+    print(deleted_indices)
     for ll in deleted_indices[::-1]:
         activity=np.delete(activity,(ll),axis=0)
         shapes=np.delete(shapes,(ll),axis=0)

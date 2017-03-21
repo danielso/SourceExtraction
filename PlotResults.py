@@ -54,8 +54,8 @@ def PlotAll(SaveNames,params):
     # PostProcessing   
     Split=False   
     Threshold=False   #threshold shapes in the end and keep only connected components
-    Prune=True  # Remove "Bad" components (where bad is defined within SplitComponent fucntion)
-    Merge=True # Merge highly correlated nearby components
+    Prune=False  # Remove "Bad" components (where bad is defined within SplitComponent fucntion)
+    Merge=False # Merge highly correlated nearby components
     FineTune=False # SHould we fine tune activity after post-processing? (mainly after merging)
     IncludeBackground=False #should we include the background as an extracted component?
     
@@ -67,7 +67,7 @@ def PlotAll(SaveNames,params):
     restrict_support=True #in shape video, zero out data outside support of shapes
     C=4 #number of components to show in shape videos (if larger then number of shapes L, then we automatically set C=L)
     color_map='gray' #'gnuplot'
-    frame_rate=10.0 #Hz
+    frame_rate= 'color' #10.0 #Hz
     
     # Fetch experimental 3D data 
     data=GetData(params.data_name)
@@ -825,10 +825,12 @@ def PlotAll(SaveNames,params):
             im_array[1].set_data(data[ii])        
             im_array[2].set_data(residual[ii])                     
             
-            if frame_rate!=[]:
-                title.set_text('Data, time = %.2f sec' % (old_div(ii,frame_rate)))
-            else:
+            if frame_rate==[]:
                 title.set_text('Data, time = %.1f' % ii)
+            elif frame_rate=='color':#%for Fisseq
+                title.set_text('Data, frame = {0:d}, color={1:d}'.format(ii,np.mod(ii,4)))
+            else:
+                title.set_text('Data, time = %.2f sec' % (old_div(ii,frame_rate)))
         
         if save_video==True:
             writer = animation.writers['ffmpeg'](fps=10)

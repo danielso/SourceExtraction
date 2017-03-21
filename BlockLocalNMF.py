@@ -133,6 +133,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
 ### Initialize shapes, activity, and residual ###        
     
     data0,dims0=DownScale(data,mb,ds) #downscaled data and dimensions
+    
     if isinstance(ds,int):
         ds=ds*np.ones(D-1)
 
@@ -143,6 +144,47 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
         activity = data0[:, list(map(int, old_div(centers[:, 0], ds[0]))), list(map(int, old_div(centers[:, 1], ds[1])))].T
         
     data0 = data0.reshape(dims0[0], -1) #reshape data0 to more convient timexspace form
+    
+    
+    comp_method=None
+    M=30 #compression ratio
+    if comp_method == 'subsample':
+        data0 = data0[np.linspace(0, dims0[0] - 1, M).astype('int')]
+        dims0 = (M,) + dims0[1:] 
+    elif comp_method == 'random':
+        np.random.seed(1)
+        # Mariano Tepper, Guillermo Sapiro: COMPRESSED NONNEGATIVE MATRIX
+        # FACTORIZATION IS FAST AND ACCURATE
+        Om = np.random.randn(np.prod(dims0[1:]), M).astype('float32')
+        # B = data0.dot(data0.T.dot(data0.dot(Om)))
+        B = data0.dot(Om)
+        Lmatrix = np.linalg.qr(B)[0]
+        Om = np.random.randn(dims0[0], M).astype('float32')
+        # B = data0.T.dot(data0.dot(data0.T.dot(Om)))
+        B = data0.T.dot(Om)
+        Rmatrix = np.linalg.qr(B)[0].T
+        dataL = Lmatrix.T.dot(data0)
+        dataR = data0.dot(Rmatrix.T)        
+        #check non-negativity
+        print(np.min(dataL))
+        print(np.min(dataR))
+
+    elif comp_method == 'svd':
+        if mb > 1:
+            data_dec = data0.copy()
+        COV = data0.dot(data0.T)
+        _, V = np.eigh(COV, eigvals=(len(COV) - M, len(COV) - 1))
+        data0 = V.T.dot(data0)
+        dims0 = (M,) + dims0[1:]
+#    print(np.min(data0))
+
+    if comp_method is not None:
+        if D == 4: #downscale activity
+            activity = data0.reshape(dims0)[:, centers[:, 0].astype('int'), centers[:, 1].astype('int'),centers[:, 2].astype('int')].T
+        else:
+            activity = data0.reshape(dims0)[:, centers[:, 0].astype('int'), centers[:, 1].astype('int')].T
+    
+    
     Energy0=np.sum(data0**2,axis=0) #data0 energy per pixel
     data0sum=np.sum(data0,axis=0) # for sign check later
 
@@ -151,8 +193,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
     
     # float is faster than float32, presumable float32 gets converted later on
     # to float again and again
-    Energy=np.sum((data**2),axis=0) #data energy per pixel
-    
+    Energy=np.sum((data**2),axis=0) #data energy per pixel\
     # extract shapes and activity from given centers
     for ll in range(L):
         boxes[ll] = GetBox(old_div(centers[ll], ds), old_div(R, ds), dims0[1:])
@@ -171,8 +212,12 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
             zeros((1,) + dims0[1:]), shapes[ll].reshape(1, -1), boxes[ll]).ravel()
     if adaptBias:
         # Initialize background as bkg_per percentile
-        S[-1] = percentile(data0, bkg_per, 0)
-        activity = np.r_[activity, ones((1, dims0[0]))]
+        if comp_method == 'svd':
+            activity = np.r_[activity, V.sum(0).reshape(1, -1)]
+            S[-1] = np.percentile(data_dec, bkg_per, 0) if mb > 1 else np.percentile(data, bkg_per, 0)
+        else:
+            activity = np.r_[activity, ones((1, dims0[0]), dtype='float32')]
+            S[-1] = np.percentile(data0, bkg_per, 0) 
     
     lam1_s=lam1_s0*np.ones_like(S)*mbs[0] #intialize sparsity parameters
 
@@ -190,7 +235,8 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
             lam1_s=ES.lam
             for kk in range(iters0[it]):
                 # update sparisty parameters     
-                if kk%updateLambdaIntervals==0:                 
+                if kk%updateLambdaIntervals==0:      
+
                     sn=old_div(np.sqrt(Energy0-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0)),dims0[0]) # efficient way to calcuate MSE per pixel
         
                     delta_sn=sn-sn_target # noise margin
@@ -238,8 +284,11 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                             ES=ExponentialSearch(lam1_s) #we need to restart exponential search each time we add a component
                             
                 #apply additional constraints/processing                            
-                if SigmaBlur==[]:
-                    S = HALS4shape(data0, S, activity,mask,lam1_s,lam2_s,adaptBias,inner_iterations)
+                if SigmaBlur==[]:                    
+                    if comp_method == 'random':
+                        S = HALS4shape(dataL, S, activity.dot(Lmatrix),mask,lam1_s,lam2_s,adaptBias,inner_iterations)  
+                    else:
+                        S = HALS4shape(data0, S, activity,mask,lam1_s,lam2_s,adaptBias,inner_iterations)                        
                 else: #obsolete
                     S=FISTA4shape(data0, S, activity,mask,lam1_s,adaptBias,SigmaBlur,dims0)
                 
@@ -247,7 +296,15 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                     S=LargestConnectedComponent(S,dims0,adaptBias)
                 if WaterShed==True:
                     S=LargestWatershedRegion(S,dims0,adaptBias)
+                
+            if comp_method == 'random':
+                NonNegative=False
+                activity = HALS4activity(dataR, S.dot(Rmatrix.T), activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,inner_iterations)                 
+            else:
+                if comp_method == 'svd':
+                    NonNegative=False
                 activity = HALS4activity(data0, S, activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,inner_iterations)                                
+                
                 if SigmaMask!=[]:
                     mask=GrowMasks(S,mask,boxes,dims0,adaptBias,SigmaMask)
                 S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)

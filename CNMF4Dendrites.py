@@ -147,7 +147,7 @@ class CNMF4Dendrites(object):
         # Initialize Parameters
         dims = data.shape # data dimensions
         D = len(dims) #number of data dimensions
-        R = 3 * asarray(sig)  # size of bounding box is 3 times size of neuron
+        R = (3 * asarray(sig)).astype('uint8')  # size of bounding box is 3 times size of neuron
         L = len(centers) # number of components (not including background)
         inner_iterations=10 # number of iterations in inners loops
         shapes = [] #array of spatial components
@@ -168,7 +168,7 @@ class CNMF4Dendrites(object):
         
         data0,dims0=DownScale(data,mb,ds) #downscaled data and dimensions
         if isinstance(ds,int):
-            ds=ds*np.ones(D-1)
+            ds=(ds*np.ones(D-1)).astype('uint8')
     
         if D == 4: #downscale activity
             activity = data0[:, list(map(int, old_div(centers[:, 0], ds[0]))), list(map(int, old_div(centers[:, 1], ds[1]))),

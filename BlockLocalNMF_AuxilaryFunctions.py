@@ -360,12 +360,13 @@ def addComponent(new_cent,current_data,data_dim,box_size,S, activity, mask,cente
     L: integer
         number of components without background
     """   
+    new_cent=new_cent.astype('int')
     new_activity=current_data[:,new_cent]-np.dot(activity.T,S[:,new_cent])
     #       new_activity=np.random.randn(data_dim[0]) # for testing purposes only
     activity=np.insert(activity,0,new_activity,axis=0)
     S=np.insert(S,0,0*current_data[0,:].reshape(1,-1),axis=0) 
     centers=np.insert(centers,0,np.unravel_index(new_cent,data_dim[1:]),axis=0)
-    boxes=np.insert(boxes,0,GetBox(centers[0], box_size, data_dim[1:]),axis=0)
+    boxes=np.insert(boxes,0,GetBox(centers[0].astype('int'), box_size, data_dim[1:]),axis=0)
             
     temp = zeros(data_dim[1:])
     temp[[slice(*a) for a in boxes[0]]]=1
