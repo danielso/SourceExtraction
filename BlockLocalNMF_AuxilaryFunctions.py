@@ -444,7 +444,7 @@ def DownScale(data,mb,ds):
                 len(data0), old_div(dims[1], ds[0]), ds[0], old_div(dims[2], ds[1]), ds[1], old_div(dims[3], ds[2]), ds[2])\
                 .mean(2).mean(3).mean(4)
         else:
-            data0 = data0[:,:int(old_div(dims[1],ds[0])) *ds[0],:int(old_div(dims[2],ds[1])) *ds[1]].reshape(len(data0), old_div(dims[1], ds[0]), ds[0], old_div(dims[2], ds[1]), ds[1]).mean(2).mean(3)
+            data0 = data0[:,:int(old_div(dims[1],ds[0]) * ds[0]),:int(old_div(dims[2],ds[1]) *ds[1])].reshape(len(data0), int(old_div(dims[1], ds[0])), int(ds[0]), int(old_div(dims[2], ds[1])), int(ds[1])).mean(2).mean(3)
         # for i,d in enumerate(dims[1:]):
         #     data0 = data0.reshape(data0.shape[:1+i] + (d / ds, ds, -1)).mean(2+i)
 
