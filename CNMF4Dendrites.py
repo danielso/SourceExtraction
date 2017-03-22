@@ -18,7 +18,7 @@ from past.utils import old_div
 from numpy import asarray, percentile, zeros, ones, ix_, arange, exp, prod, repeat
 import numpy as np
 from BlockLocalNMF_AuxilaryFunctions import  HALS4activity, HALS4shape,RenormalizeDeleteSort,addComponent,GetBox, \
-RegionAdd,RegionCut,DownScale,LargestConnectedComponent,LargestWatershedRegion,SmoothBackground,ExponentialSearch,GrowMasks
+RegionAdd,RegionCut,DownScale,LargestConnectedComponent,LargestWatershedRegion,SmoothBackground,ExponentialSearch,GrowMasks, ZeroHoldShape
 from AuxilaryFunctions import PruneComponents,MergeComponents
 
     
@@ -147,6 +147,8 @@ class CNMF4Dendrites(object):
         # Initialize Parameters
         dims = data.shape # data dimensions
         D = len(dims) #number of data dimensions
+        if len(sig)!=D:
+            raise NameError('Length of sig must be equal to number of spatial dimensions of data')    
         R = (3 * asarray(sig)).astype('uint8')  # size of bounding box is 3 times size of neuron
         L = len(centers) # number of components (not including background)
         inner_iterations=10 # number of iterations in inners loops
@@ -181,11 +183,9 @@ class CNMF4Dendrites(object):
         data0sum=np.sum(data0,axis=0) # for sign check later
     
         data = data.astype('float').reshape(dims[0], -1) #reshape data to more convient timexspace form
-        datasum=np.sum(data,axis=0)# for sign check later
         
         # float is faster than float32, presumable float32 gets converted later on
         # to float again and again
-        Energy=np.sum((data**2),axis=0) #data energy per pixel
         
         # extract shapes and activity from given centers
         for ll in range(L):
@@ -221,7 +221,7 @@ class CNMF4Dendrites(object):
                 lam1_s=ES.lam
                 for kk in range(iters0[it]):
                     # update sparisty parameters     
-                    if kk%updateLambdaIntervals==0:                 
+                    if kk%updateLambdaIntervals==0:   
                         sn=old_div(np.sqrt(Energy0-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0)),dims0[0]) # efficient way to calcuate MSE per pixel
             
                         delta_sn=sn-sn_target # noise margin
@@ -310,17 +310,15 @@ class CNMF4Dendrites(object):
                 activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1)
                 data0=data
                 dims0=dims
+                Energy0=np.sum(data0**2,axis=0) #data0 energy per pixel
+                data0sum=np.sum(data0,axis=0) # for sign check later
+                S=ZeroHoldShape(S,dims,ds)
                 if D==4:
-                    S = repeat(repeat(repeat(S.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2), ds[2], 3)
                     lam1_s= repeat(repeat(repeat(lam1_s.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2), ds[2], 3)
-                else:
-                    S = repeat(repeat(S.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2)
+                else:                    
                     lam1_s= repeat(repeat(lam1_s.reshape((-1,) + dims0[1:]), ds[0], 1), ds[1], 2)
                 for dd in range(1,D):
                     while S.shape[dd]<dims[dd]:
-                        shape_append=np.array(S.shape)
-                        shape_append[dd]=1
-                        S=np.append(S,values=np.take(S,-1,axis=dd).reshape(shape_append),axis=dd)
                         lam1_s=np.append(lam1_s,values=np.take(lam1_s,-1,axis=dd).reshape(shape_append),axis=dd)
                 S=S.reshape(L + adaptBias, -1)
                 lam1_s=lam1_s.reshape(L+ adaptBias,-1)
@@ -363,12 +361,12 @@ class CNMF4Dendrites(object):
             
             # Measure MSE and update sparsity parameters
             print('main iteration kk=',kk,'L=',L)
-            if (kk+1)%updateLambdaIntervals==0:            
-                sn=np.sqrt(old_div((Energy-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0)),dims0[0]))
+            if (kk+1)%updateLambdaIntervals==0:   
+                sn=np.sqrt(old_div((Energy0-2*np.sum(np.dot(activity,data0)*S,axis=0)+np.sum(np.dot(np.dot(activity,activity.T),S)*S,axis=0)),dims0[0]))
                 delta_sn=sn-sn_target
                 MSE = np.mean(sn**2)
                 
-                signcheck=(datasum-np.dot(np.sum(activity.T,axis=0),S))<0
+                signcheck=(data0sum-np.dot(np.sum(activity.T,axis=0),S))<0
                 
                 if S==[]:
                     spars=0
@@ -411,12 +409,14 @@ class CNMF4Dendrites(object):
                     MSE_array.append(MSE)
         
         # Some post-processing 
-        S=S.reshape((-1,) + dims[1:])
+        S=S.reshape((-1,) + dims0[1:])
         S,activity,L=PruneComponents(S,activity,L) #prune "bad" components
         if len(S)>1:
             S,activity,L=MergeComponents(S,activity,L,threshold_activity=MergeThreshold_activity,threshold_shape=MergeThreshold_shapes,sig=10)    #merge very similar components
             if not FineTune:
                 activity = ones((L + adaptBias, dims[0])) * activity.mean(1).reshape(-1, 1) #extract activity from full data
+                S=ZeroHoldShape(S,dims,ds)
+
             activity=HALS4activity(data, S.reshape((len(S),-1)), activity,NonNegative,lam1_t,lam2_t,dims0,[],iters=30)
         
         return asarray(MSE_array), S, activity

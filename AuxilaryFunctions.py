@@ -195,7 +195,8 @@ def GetData(data_name):
         data=data[:int(old_div(len(data), ds)) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
     elif data_name=='FISSEQ_MIT':  
-        img= tff.TiffFile( DataFolder + 'FISSEQ_MIT/raw_no_markers_no_background.tif')       
+#        img= tff.TiffFile( DataFolder + 'FISSEQ_MIT/raw_no_markers_no_background.tif')  
+        img= tff.TiffFile( DataFolder + 'FISSEQ_MIT/x4_no _background.tif')  
         data=img.asarray()
         data=np.asarray(data,dtype='float')  
         orig_dims=data.shape

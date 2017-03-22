@@ -340,13 +340,13 @@ def GetDefaultParams():
         SigmaMask=3 
     elif data_name=='FISSEQ_MIT':
         NumCent=100 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
-        mbs=[1] # temporal downsampling of data in intial phase of NMF
-        ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
-        TargetAreaRatio=[0.02,0.2] # target sparsity range for spatial components
+        mbs=[2] # temporal downsampling of data in intial phase of NMF
+        ds=2 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
+        TargetAreaRatio=[0.005,0.05] # target sparsity range for spatial components
         repeats=1 # how many repeations to run NMF algorithm
-        iters0=[200] # number of intial NMF iterations, in which we downsample data and add components
+        iters0=[100] # number of intial NMF iterations, in which we downsample data and add components
         iters=100 # number of main NMF iterations, in which we fine tune the components on the full data
-        lam1_s=10# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
+        lam1_s=2# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
         updateLambdaIntervals=2 # update sparsity parameter every updateLambdaIntervals iterations
         addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
         updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations

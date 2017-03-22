@@ -434,14 +434,14 @@ def DownScale(data,mb,ds):
         dims = data.shape
         D = len(dims)
         if isinstance(ds,int):
-            ds=ds*np.ones(D-1)
+            ds=(ds*np.ones(D-1)).astype('uint8')
         elif (len(ds)!=D-1):
             print("either type(ds)==int, or len(ds)== the number of spatial dimensions in data")
             return
-        data0 = data[:int(old_div(len(data), mb)) * mb].reshape((-1, mb) + data.shape[1:]).mean(1)
+        data0 = data[:int(int(old_div(len(data), mb)) * mb)].reshape((-1, mb) + data.shape[1:]).mean(1)
         if D == 4:
-            data0 = data0[:,:int(old_div(dims[1],ds[0])) *ds[0],:int(old_div(dims[2],ds[1])) *ds[1],:int(old_div(dims[3],ds[2])) *ds[2]].reshape(
-                len(data0), old_div(dims[1], ds[0]), ds[0], old_div(dims[2], ds[1]), ds[1], old_div(dims[3], ds[2]), ds[2])\
+            data0 = data0[:,:int(int(old_div(dims[1],ds[0])) *ds[0]),:int(int(old_div(dims[2],ds[1]))*ds[1]) ,:int(int(old_div(dims[3],ds[2])) *ds[2])].reshape(
+                len(data0), int(old_div(dims[1], ds[0])), ds[0], int(old_div(dims[2], ds[1])), ds[1], int(old_div(dims[3], ds[2])), ds[2])\
                 .mean(2).mean(3).mean(4)
         else:
             data0 = data0[:,:int(old_div(dims[1],ds[0]) * ds[0]),:int(old_div(dims[2],ds[1]) *ds[1])].reshape(len(data0), int(old_div(dims[1], ds[0])), int(ds[0]), int(old_div(dims[2], ds[1])), int(ds[1])).mean(2).mean(3)
@@ -506,6 +506,37 @@ def LargestConnectedComponent(shapes,dims,skipBias):
 #            shapes[ll]=temp
 #    shapes=shapes.reshape((len(shapes),-1))
 #    return shapes
+    
+    
+def ZeroHoldShape(S,dims,ds):
+    """
+    Zero hold shapes with downsample factor ds
+    
+    Parameters
+    ----------
+    S: array, shape (L, XxYx(xZ)) 
+        spatial components
+    dims : list
+         data dimensions
+    ds : list
+            factor for spatial downsampling at each dimension, can be an integer or a list of the size of spatial dimensions
+    Returns
+    -------
+    S: array, shape (L, XxYx(xZ)) 
+        spatial components upsampled via zero hold
+
+    """
+    D=len(dims)
+    if D==4:
+        S = np.repeat(np.repeat(np.repeat(S, ds[0], 1), ds[1], 2), ds[2], 3)
+    else:
+        S = np.repeat(np.repeat(S, ds[0], 1), ds[1], 2)
+    for dd in range(1,D):
+        while S.shape[dd]<dims[dd]:
+            shape_append=np.array(S.shape)
+            shape_append[dd]=1
+            S=np.append(S,values=np.take(S,-1,axis=dd).reshape(shape_append),axis=dd)  
+    return S
     
 def LargestWatershedRegion(shapes,dims,skipBias): 
     """
