@@ -147,7 +147,7 @@ class CNMF4Dendrites(object):
         # Initialize Parameters
         dims = data.shape # data dimensions
         D = len(dims) #number of data dimensions
-        if len(sig)!=D:
+        if len(sig)!=(D-1):
             raise NameError('Length of sig must be equal to number of spatial dimensions of data')    
         R = (3 * asarray(sig)).astype('uint8')  # size of bounding box is 3 times size of neuron
         L = len(centers) # number of components (not including background)
