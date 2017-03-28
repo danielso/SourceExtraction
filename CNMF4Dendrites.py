@@ -410,7 +410,7 @@ class CNMF4Dendrites(object):
         
         # Some post-processing 
         S=S.reshape((-1,) + dims0[1:])
-        S,activity,L=PruneComponents(S,activity,L) #prune "bad" components
+#        S,activity,L=PruneComponents(S,activity,L) #prune "bad" components
         if len(S)>1:
             S,activity,L=MergeComponents(S,activity,L,threshold_activity=MergeThreshold_activity,threshold_shape=MergeThreshold_shapes,sig=10)    #merge very similar components
             if not FineTune:

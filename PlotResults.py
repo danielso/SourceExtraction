@@ -45,17 +45,17 @@ def PlotAll(SaveNames,params):
     plot_residual_projections=False
     # videos to generate
     video_shapes=False
-    video_residual=True
-    video_slices=False
+    video_residual=False
+    video_slices=True
     # what to save
-    save_video=True
-    save_plot=True
+    save_video=False
+    save_plot=False
     close_figs=True#close all figs right after saving (to avoid memory overload)
     # PostProcessing   
     Split=False   
     Threshold=False   #threshold shapes in the end and keep only connected components
     Prune=False  # Remove "Bad" components (where bad is defined within SplitComponent fucntion)
-    Merge=False # Merge highly correlated nearby components
+    Merge=True # Merge highly correlated nearby components
     FineTune=False # SHould we fine tune activity after post-processing? (mainly after merging)
     IncludeBackground=False #should we include the background as an extracted component?
     
@@ -716,8 +716,8 @@ def PlotAll(SaveNames,params):
     #plt.show()
     
      #%% ##### Plot denoised slices - Results
-#    z_slices=[0,2,4,6,8] #which z slices to look at slice plots/videos
-    z_slices=list(range(dims[min_dim+1])) #which z slices to look at slice plots/videos
+    z_slices=[0,2,4,6,8] #which z slices to look at slice plots/videos
+#    z_slices=list(range(dims[min_dim+1])) #which z slices to look at slice plots/videos
     D=len(z_slices)
     if plot_residual_slices==True:
         
@@ -923,13 +923,13 @@ def PlotAll(SaveNames,params):
             plt.show()  
             
     #%% #####  Video Slices Residual    
-#    z_slices=[0,2,4,6,8] #which z slices to look at slice plots/videos    
-    z_slices=list(range(dims[min_dim+1])) #which z slices to look at slice plots/videos
+    z_slices=[0,2,4,6,8] #which z slices to look at slice plots/videos    
+#    z_slices=list(range(dims[min_dim+1])) #which z slices to look at slice plots/videos
     
     if video_slices:
         fig = plt.figure(figsize=(16,7))
         mi = 0
-        ma = np.percentil(data[data>0],satuartion_percentile)
+        ma = np.percentile(data[data>0],satuartion_percentile)
         mi3 = 0
         ma3 = np.percentil(data[data>0],satuartion_percentile)
 

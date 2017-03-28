@@ -195,12 +195,8 @@ def GetData(data_name):
         data=data[:int(old_div(len(data), ds)) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
     elif data_name=='FISSEQ_MIT':  
-#        img= tff.TiffFile( DataFolder + 'FISSEQ_MIT/raw_no_markers_no_background.tif')  
-        img= tff.TiffFile( DataFolder + 'FISSEQ_MIT/x4_no _background.tif')  
-        data=img.asarray()
+        data= load( DataFolder + '/FISSEQ_MIT/rolonie_sim4/low_density/1x/'+ 'all_data')  
         data=np.asarray(data,dtype='float')  
-        orig_dims=data.shape
-        data=np.reshape(data,(-1,orig_dims[-2],orig_dims[-1]))        
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel      
     else:
         print('unknown dataset name!')
@@ -420,15 +416,15 @@ def PruneComponents(shapes,activity,L,TargetAreaRatio=[],deleted_indices=[]):
         cond2=0
         print(L)
         for ll in range(L):
-            S_normalization=np.sum(shapes[ll])
-            A_normalization=np.sum(activity[ll])
+            S_normalization=np.sum(shapes[ll]>0)
+            A_normalization=np.sum(activity[ll]>0)
             if ((A_normalization<=0) or (S_normalization<=0)):
                 cond0=True
             else:
                 cond0=False
             if TargetAreaRatio!=[]:
-                cond1=np.mean(shapes[ll]>0)<0.001 #TargetAreaRatio[0]
-                cond2=np.mean(shapes[ll]>0)>0.99#(TargetAreaRatio[1]*3)
+                cond1=np.mean(shapes[ll]>0)<TargetAreaRatio[0]
+                cond2=np.mean(shapes[ll]>0)>(TargetAreaRatio[1]*3)
             if cond0 or cond1 or cond2:
                 deleted_indices.append(ll) 
             

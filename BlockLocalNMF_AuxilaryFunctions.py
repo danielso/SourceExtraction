@@ -473,7 +473,8 @@ def LargestConnectedComponent(shapes,dims,skipBias):
     """
     L=len(shapes)-skipBias     
     shapes=shapes.reshape((-1,) + dims[1:])    
-    structure=np.ones(tuple((3*np.ones((np.ndim(shapes)-1,1))).astype('uint')))
+    ind=(3*np.ones((np.ndim(shapes)-1))).astype('uint')
+    structure=np.ones(tuple(ind))
     for ll in range(L): 
         temp=np.copy(shapes[ll])
         CC,num_CC=label(temp,structure)

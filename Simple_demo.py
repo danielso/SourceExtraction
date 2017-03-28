@@ -35,13 +35,13 @@ data=load('data_small')
 
 #Get initialization for components center
 NumCent=10 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
-cent=GetCentersData(data,NumCent)
+cent=GetCentersData(data,NumCent,mbs=50)
 
 #Define CNMF parameters
 mbs=[1] # temporal downsampling of data in intial phase of NMF
-ds=2 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
+ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
 TargetAreaRatio=[0.001,0.03] # target sparsity range for spatial components
-iters0=[1] # number of intial NMF iterations, in which we downsample data and add components
+iters0=[10] # number of intial NMF iterations, in which we downsample data and add components
 iters=10 # number of main NMF iterations, in which we fine tune the components on the full data
 lam1_s=10# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
 bkg_per=20 # intialize of background shape at this percentile (over time) of video
