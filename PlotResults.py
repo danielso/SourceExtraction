@@ -15,12 +15,11 @@ def PlotAll(SaveNames,params):
     import numpy as np
     import sys
     from scipy.signal import welch
-    from pylab import load
     import matplotlib.pyplot as plt
     import matplotlib.animation as animation
     from matplotlib.backends.backend_pdf import PdfPages
 #    from scipy.ndimage.measurements import label    
-    from AuxilaryFunctions import GetRandColors, max_intensity,SuperVoxelize,GetData,PruneComponents,SplitComponents,ThresholdShapes,MergeComponents,ThresholdData,make_sure_path_exists
+    from AuxilaryFunctions import GetRandColors, max_intensity,SuperVoxelize,GetData,PruneComponents,SplitComponents,ThresholdShapes,MergeComponents,ThresholdData,make_sure_path_exists,LoadResults
 #    from BlockLocalNMF_AuxilaryFunctions import HALS4activity
     from mpl_toolkits.axes_grid1 import make_axes_locatable    
     
@@ -45,11 +44,11 @@ def PlotAll(SaveNames,params):
     plot_residual_projections=False
     # videos to generate
     video_shapes=False
-    video_residual=False
-    video_slices=True
+    video_residual=True
+    video_slices=False
     # what to save
-    save_video=False
-    save_plot=False
+    save_video=True
+    save_plot=True
     close_figs=True#close all figs right after saving (to avoid memory overload)
     # PostProcessing   
     Split=False   
@@ -57,7 +56,6 @@ def PlotAll(SaveNames,params):
     Prune=False  # Remove "Bad" components (where bad is defined within SplitComponent fucntion)
     Merge=True # Merge highly correlated nearby components
     FineTune=False # SHould we fine tune activity after post-processing? (mainly after merging)
-    IncludeBackground=False #should we include the background as an extracted component?
     
     # how to plot
     detrend=True #should we detrend the data (remove background component)?
@@ -67,7 +65,7 @@ def PlotAll(SaveNames,params):
     restrict_support=True #in shape video, zero out data outside support of shapes
     C=4 #number of components to show in shape videos (if larger then number of shapes L, then we automatically set C=L)
     color_map='gray' #'gnuplot'
-    frame_rate= 'color' #10.0 #Hz
+    frame_rate= 10 #10.0 #Hz or 'color' 
     
     # Fetch experimental 3D data 
     data=GetData(params.data_name)
@@ -107,46 +105,11 @@ def PlotAll(SaveNames,params):
     denoised_data=0    
     detrended_data=data
     
-    for rep in range(len(SaveNames)): 
-        resultsName=SaveNames[rep]
-        try:
-            results=load('NMF_Results/'+SaveNames[rep])
-        except IOError:
-            if rep==0:
-                print('results file not found!!')              
-            else:
-                break            
-        SS=results['shapes']
-        AA=results['activity']
-
-        if rep>=params.Background_num:
-            adaptBias=False
-        else:
-            adaptBias=True
-            
-        if IncludeBackground==True:
-            adaptBias=False        
-               
-        L=len(AA)-adaptBias
-        if L==0: #Stop if we encounter a file with zero components
-            break
-        S=SS[:-adaptBias]
-        b=SS[L:(L+adaptBias)]
-        A=AA[:-adaptBias]
-        f=AA[L:(L+adaptBias)]
-        if rep==0:
-            shapes=S
-            activity=A
-            background_shapes=b
-            background_activity=f
-        else:
-            shapes=np.append(shapes,S,axis=0)
-            activity=np.append(activity,A,axis=0) 
-            background_shapes=np.append(background_shapes,b,axis=0)
-            background_activity=np.append(background_activity,f,axis=0) 
+    shapes, activity, background_shapes, background_activity,resultsName=LoadResults(SaveNames,params.Background_num)
         
     L=len(shapes)
     adaptBias=0
+    
     
     if Split==True:
         shapes,activity,L,all_local_max=SplitComponents(shapes,activity,adaptBias)   
@@ -156,7 +119,7 @@ def PlotAll(SaveNames,params):
         
     if Prune==True:
 #           deleted_indices=[5,9,11,14,15,17,24]+range(25,36)
-        shapes,activity,L=PruneComponents(shapes,activity,L,params.TargetAreaRatio)
+        shapes,activity,L=PruneComponents(shapes,activity,L,[0,params.TargetAreaRatio[1]])
     
     activity_NonNegative=np.copy(activity)
     activity_NonNegative[activity_NonNegative<0]=0
@@ -169,7 +132,6 @@ def PlotAll(SaveNames,params):
         activity_NonNegative=activity
     
     print(str(L)+' shapes detected')
-    
     detrended_data= detrended_data - background_activity.T.dot(background_shapes.reshape((len(background_shapes), -1))).reshape(dims)        
 
     if Threshold==True:            

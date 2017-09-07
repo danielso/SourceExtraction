@@ -30,8 +30,8 @@ from AuxilaryFunctions import GetCentersData,GetFileName
 #data=np.asarray(data,dtype='float')  
 #data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
 
-from pylab import load  
-data=load('data_small')
+#from pylab import load  
+#data=load('data_small')
 
 #Get initialization for components center
 NumCent=10 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
@@ -63,8 +63,9 @@ MSE_array, shapes, activity=cnmf_obj.fit(data,cent)
 from Demo import GetDefaultParams
 import pickle 
 
+## !!!! use same data_name in GetDefaultParams  !!! ###
 params,params_dict=GetDefaultParams() # pack parameters in a convient way (all parameters have the same values, defined similarly inside the function)
-saveName=GetFileName(params_dict,1)
+saveName=GetFileName(params_dict,0)
 
 from io import open
 f = open('NMF_Results/'+saveName, 'wb')

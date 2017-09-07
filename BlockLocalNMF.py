@@ -297,21 +297,21 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
                 if WaterShed==True:
                     S=LargestWatershedRegion(S,dims0,adaptBias)
                 
-            if comp_method == 'random':
-                NonNegative=False
-                activity = HALS4activity(dataR, S.dot(Rmatrix.T), activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,inner_iterations)                 
-            else:
-                if comp_method == 'svd':
+                if comp_method == 'random':
                     NonNegative=False
-                activity = HALS4activity(data0, S, activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,inner_iterations)                                
-                
+                    activity = HALS4activity(dataR, S.dot(Rmatrix.T), activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,inner_iterations)                 
+                else:
+                    if comp_method == 'svd':
+                        NonNegative=False
+                    activity = HALS4activity(data0, S, activity,NonNegative,lam1_t,lam2_t,dims0,SigmaBlur,inner_iterations)                                
+                    
                 if SigmaMask!=[]:
                     mask=GrowMasks(S,mask,boxes,dims0,adaptBias,SigmaMask)
                 S, activity, mask,centers,boxes,ES,L=RenormalizeDeleteSort(S, activity, mask,centers,boxes,ES,adaptBias,MedianFilt)
                 lam1_s=ES.lam
                 if SmoothBkg==True:
                     S=SmoothBackground(S,dims0,adaptBias,tuple(old_div(np.array(sig),np.array(ds))))
-                
+                    
                 print('Subsampled iteration',kk,'it=',it,'L=',L)
             
             # use next (smaller) value for temporal downscaling
@@ -460,7 +460,7 @@ def LocalNMF(data, centers, sig, NonNegative=True,FinalNonNegative=True,verbose=
     
     # Some post-processing 
     S=S.reshape((-1,) + dims[1:])
-    S,activity,L=PruneComponents(S,activity,L) #prune "bad" components
+#    S,activity,L=PruneComponents(S,activity,L) #prune "bad" components
     if len(S)>1:
         S,activity,L=MergeComponents(S,activity,L,threshold_activity=MergeThreshold_activity,threshold_shape=MergeThreshold_shapes,sig=10)    #merge very similar components
         if not FineTune:

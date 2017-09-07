@@ -62,6 +62,7 @@ b=2*np.ceil(old_div(K,a))
 pp = PdfPages('Components Correlations.pdf')
 fig=plt.figure(figsize=(18,11))
 for ii in range(K):
+    shapes_array=shapes_array-np.mean(shapes_array,axis=1)
     shapes_array=shapes_array.reshape((-1,)+dims_shape)
     shapes_array=gaussian_filter(shapes_array, (0,) + tuple(sig[ii]*np.ones((len(dims_shape),1))))
     shapes_array=shapes_array.reshape(M,-1)
@@ -84,6 +85,7 @@ dims_activity=activity_array[0].shape
 
 fig=plt.figure(figsize=(18,11))
 for ii in range(K):
+    activity_array=activity_array-np.mean(activity_array,axis=1)
     activity_array=gaussian_filter(activity_array, (0,sig[ii]))
     activity_cov=np.dot(activity_array,activity_array.T)
     activity_vars=np.diag(activity_cov).reshape(-1,1)
@@ -100,6 +102,9 @@ for ii in range(K):
     
 pp.savefig(fig)
 pp.close()
+
+
+
 
 ##%%
 #from sklearn.feature_extraction import image

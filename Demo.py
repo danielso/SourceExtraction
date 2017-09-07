@@ -28,7 +28,7 @@ def GetDefaultParams():
     data_name_set=['Hillman','HillmanSmall','Sophie2D','Sophie3D','SophieVoltage3D','Sophie3DSmall',
     'SaraSmall','Sara19DEC2015_w1t1','PhilConfocal','PhilMFM','PhilConfocal2','BaylorAxonsSmall',
     'BaylorAxons','BaylorAxonsQuiet','BaylorAxonsActive','BaylorAxonsJiakun1','BaylorAxonsJiakun2','Ja_Ni_ds3',
-    'YairDendrites','FISSEQ_MIT']
+    'YairDendrites','FISSEQ_MIT','Baylor_multi_Z','Vaughan','Nitzan','Darcy_SEP2017']
     data_name=data_name_set[1]
     
     # "default" parameters - for additional information see "LocalNMF" function in BlockLocalNMF
@@ -339,31 +339,122 @@ def GetDefaultParams():
         WaterShed=False # should we constrain all spatial component to have only one watershed component?        
         SigmaMask=3 
     elif data_name=='FISSEQ_MIT':
-        NumCent=100 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+        NumCent=0 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
         mbs=[1] # temporal downsampling of data in intial phase of NMF
         ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
-        TargetAreaRatio=[0.01,0.2] # target sparsity range for spatial components
-        repeats=1# how many repeations to run NMF algorithm
+        TargetAreaRatio=[0.001,0.05] # target sparsity range for spatial components
+        repeats=60# how many repeations to run NMF algorithm
         iters0=[50] # number of intial NMF iterations, in which we downsample data and add components
         iters=50 # number of main NMF iterations, in which we fine tune the components on the full data
-        lam1_s=10# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
+        lam1_s=1# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
         updateLambdaIntervals=2 # update sparsity parameter every updateLambdaIntervals iterations
         addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
         updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
         Background_num=1 #number of background components - one of which at every repetion
         bkg_per=20 # intialize of background shape at this percentile (over time) of video
         sig=(5,5,5) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
-         
+        
+        MergeThreshold_activity=1#merge components if activity is correlated above the this threshold (and sufficiently close)
         FineTune=False
         NonNegative=True # should we constrain activity and shapes to be non-negative?
         FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
         Connected=True # should we constrain all spatial component to be connected?
         WaterShed=True # should we constrain all spatial component to have only one watershed component?        
         SigmaMask=3 
+    elif data_name=='Baylor_multi_Z':
+        NumCent=100 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+        mbs=[1] # temporal downsampling of data in intial phase of NMF
+        ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
+        TargetAreaRatio=[0.01,0.06] # target sparsity range for spatial components
+        repeats=1 # how many repeations to run NMF algorithm
+        iters0=[30] # number of intial NMF iterations, in which we downsample data and add components
+        iters=100 # number of main NMF iterations, in which we fine tune the components on the full data
+        lam1_s=10# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
+        updateLambdaIntervals=2 # update sparsity parameter every updateLambdaIntervals iterations
+        addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
+        updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
+        Background_num=1 #number of background components - one of which at every repetion
+        bkg_per=0.1 # intialize of background shape at this percentile (over time) of video
+        sig=(200,200,200) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
+        MergeThreshold_activity=0.85#merge components if activity is correlated above the this threshold (and sufficiently close)
+        MergeThreshold_shapes=0.99 #merge components if activity is correlated above the this threshold (and sufficiently close)        
+        
+        ThresholdData= False  # threshold data with PSD level
+        FineTune=False
+        Deconvolve=False #Deconvolve activity to get smoothed (denoised) calcium trace
+        NonNegative=True # should we constrain activity and shapes to be non-negative?
+        FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
+        Connected=True # should we constrain all spatial component to be connected?
+        WaterShed=True # should we constrain all spatial component to have only one watershed component?        
+        SigmaMask=3  
+    elif data_name=='Vaughan':
+        NumCent=100 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+        mbs=[1] # temporal downsampling of data in intial phase of NMF
+        ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
+        TargetAreaRatio=[0.01,0.15] # target sparsity range for spatial components
+        repeats=1 # how many repeations to run NMF algorithm
+        iters0=[30] # number of intial NMF iterations, in which we downsample data and add components
+        iters=50 # number of main NMF iterations, in which we fine tune the components on the full data
+        lam1_s=0.00001# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
+        updateLambdaIntervals=2 # update sparsity parameter every updateLambdaIntervals iterations
+        addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
+        updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
+        Background_num=1 #number of background components - one of which at every repetion
+        bkg_per=20 # intialize of background shape at this percentile (over time) of video
+        sig=(600,600) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
+        MergeThreshold_activity=0.85 #merge components if activity is correlated above the this threshold (and sufficiently close)
+        MergeThreshold_shapes=0.99 #merge components if activity is correlated above the this threshold (and sufficiently close)        
+        
+        ThresholdData= False  # threshold data with PSD level
+        FineTune=False
+        Deconvolve=False #Deconvolve activity to get smoothed (denoised) calcium trace
+        NonNegative=True # should we constrain activity and shapes to be non-negative?
+        FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
+        Connected=True # should we constrain all spatial component to be connected?
+        WaterShed=False# should we constrain all spatial component to have only one watershed component?        
+        SigmaMask=3 
+    elif data_name=='Nitzan':
+        NumCent=0 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+        mbs=[1]
+        ds=1
+        TargetAreaRatio=[0.005,0.1]
+        repeats=1
+        iters0=[10]
+        iters=10        
+        addComponentsIntervals=100 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
+        updateLambdaIntervals=2
+        updateRhoIntervals=1
+        lam1_s=0.001
+        Background_num=1 #number of background components
+        bkg_per=20
+        Connected=True
+        WaterShed=False
+        FinalNonNegative=False
+        sig=(10,10)
+    elif data_name=='Darcy_SEP2017':
+        NumCent=0 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
+        mbs=[1] # temporal downsampling of data in intial phase of NMF
+        ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
+        TargetAreaRatio=[0.01,0.12] # target sparsity range for spatial components
+        repeats=10 # how many repeations to run NMF algorithm
+        iters0=[30] # number of intial NMF iterations, in which we downsample data and add components
+        iters=100 # number of main NMF iterations, in which we fine tune the components on the full data
+        lam1_s=1# l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
+        updateLambdaIntervals=2 # update sparsity parameter every updateLambdaIntervals iterations
+        addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
+        updateRhoIntervals=1 # in main NMF phase, update sparsity learning speed (Rho) every updateLambdaIntervals*updateRhoIntervals iterations
+        Background_num=2 #number of background components - one of which at every repetion
+        bkg_per=20 # intialize of background shape at this percentile (over time) of video
+        sig=(5,5) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
+        
+        FineTune=False
+        NonNegative=True # should we constrain activity and shapes to be non-negative?
+        FinalNonNegative=True # should we constrain activity to be non-negative at final iteration?
+        Connected=True # should we constrain all spatial component to be connected?
+        WaterShed=False # should we constrain all spatial component to have only one watershed component?        
+        SigmaMask=3 
         
         
-        
-
     params_dict=dict([['data_name',data_name],['SuperVoxelize',SuperVoxelize],['NonNegative',NonNegative],
                       ['FinalNonNegative',FinalNonNegative],['mbs',mbs],['TargetAreaRatio',TargetAreaRatio],['Deconvolve',Deconvolve],
                      ['iters',iters],['iters0',iters0],['lam1_s',lam1_s],['MedianFilt',MedianFilt],['SigmaMask',SigmaMask],['FineTune',FineTune],
@@ -402,6 +493,7 @@ if __name__ == "__main__":
     params,params_dict=GetDefaultParams() # get default parameters for dataset
     
     data=GetData(params.data_name) #get data 
+
     
     if params.ThresholdData:  #obsolete
         data=ThresholdData(data)

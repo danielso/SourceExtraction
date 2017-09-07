@@ -89,7 +89,7 @@ def GetData(data_name):
     
     DataFolder=GetDataFolder()
     
-    make_sure_path_exists(DataFolder)
+#    make_sure_path_exists(DataFolder)
     
     # Fetch experimental 3D data     
     if data_name=='HillmanSmall':
@@ -195,14 +195,103 @@ def GetData(data_name):
         data=data[:int(old_div(len(data), ds)) * ds].reshape((-1, ds) + data.shape[1:]).mean(1)
         data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
     elif data_name=='FISSEQ_MIT':  
-        data= load( DataFolder + '/FISSEQ_MIT/rolonie_sim4/low_density/1x/'+ 'all_data')  
+        data= np.load( DataFolder + 'FISSEQ_MIT/'+ 'all_data_1x.npy')  
         data=np.asarray(data,dtype='float')  
-        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel      
+        data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
+    elif data_name=='Baylor_multi_Z':  
+        temp = loadmat(DataFolder + 'Baylor_multi_Z/processed_data.mat')
+        data=temp["data"]
+        data=np.asarray(data,dtype='float')  
+    elif data_name=='Vaughan':
+        temp=h5py.File(DataFolder + 'VaughanData/stim_response_matrix.mat')
+        data=temp["stim_response_matrix"]
+        data=np.asarray(data,dtype='float')
+        data=np.transpose(data, [2,0,1,3])  
+        data=data[:,50:450,50:450,4]
+        data=data-np.min(data, axis=0)   
+    elif data_name=='Nitzan':
+        img = tff.TiffFile('C:/Users/Daniel/Dropbox/Data for Daniel Soudry/Stack no binning central panel.tif')
+        data=img.asarray() 
+        data=np.asarray(data,dtype='float')
+        data=data-np.min(data)
+    elif data_name=='Darcy_SEP2017':
+        img = tff.TiffFile('dsp_dend.tif')
+        data=img.asarray() 
+        data=np.asarray(data,dtype='float')
+        data=data-np.min(data)
     else:
         print('unknown dataset name!')
     return data
     
-def GetCentersData(data,NumCent,data_name=[],rep=0,mbs=50): 
+def LoadResults(SaveNames,Background_num,IncludeBackground=False): 
+    '''
+    Load CNMF results from data files
+    Input
+    ----------
+    SaveNames : a list of strings
+        each string is a results file
+    Background_num :  int
+        number of background components - one of which at every repetion
+    IncludeBackground : Boolean
+        if True, then we treat Background components as regular components
+        
+    Output
+    ----------
+    shapes : array, shape (L, X, Y (,Z))
+        the neuronal shape vectors (empty if no components found)
+    activity : array, shape (L, T)
+        the neuronal activity for each shape (empty if no components found)
+    background_shapes : array, shape (Background_nums, X, Y (,Z))
+        the neuronal background shape vectors (empty if no components found)
+    background_activity : array, shape (Background_num, T)
+        the neuronal background activity for each shape (empty if no components found)    
+    resultsName : str
+        string to use when saving plots and videos
+    
+    '''
+    
+    from pylab import load
+    for rep in range(len(SaveNames)): 
+        resultsName=SaveNames[rep]
+        try:
+            results=load('NMF_Results/'+SaveNames[rep])
+        except IOError:
+            if rep==0:
+                print('results file not found!!')              
+            else:
+                break            
+        SS=results['shapes']
+        AA=results['activity']
+    
+        if rep>=Background_num:
+            adaptBias=False
+        else:
+            adaptBias=True
+            
+        if IncludeBackground==True:
+            adaptBias=False        
+               
+        L=len(AA)-adaptBias
+        if L==0: #Stop if we encounter a file with zero components
+            break
+        S=SS[:L]
+        b=SS[L:(L+adaptBias)]
+        A=AA[:L]
+        f=AA[L:(L+adaptBias)]
+        if rep==0:
+            shapes=S
+            activity=A
+            background_shapes=b
+            background_activity=f
+        else:
+            shapes=np.append(shapes,S,axis=0)
+            activity=np.append(activity,A,axis=0) 
+            background_shapes=np.append(background_shapes,b,axis=0)
+            background_activity=np.append(background_activity,f,axis=0) 
+            
+    return shapes, activity, background_shapes, background_activity,resultsName
+
+def GetCentersData(data,NumCent,data_name=[],rep=0,mbs=10): 
     """
     Get intialization centers using group lasso
     
