@@ -74,7 +74,7 @@ def GetDefaultParams():
         mbs=[1] # temporal downsampling of data in intial phase of NMF
         ds=1 # spatial downsampling of data in intial phase of NMF. Ccan be an integer or a list of the size of spatial dimensions
         TargetAreaRatio=[0.005,0.02] # target sparsity range for spatial components
-        repeats=2 # how many repeations to run NMF algorithm
+        repeats=1 # how many repeations to run NMF algorithm
         iters0=[10] # number of intial NMF iterations, in which we downsample data and add components
         iters=10 # number of main NMF iterations, in which we fine tune the components on the full data
         lam1_s=0.1 # l1 regularization parameter initialization (for increased sparsity). If zero, we have no l1 sparsity penalty
@@ -82,7 +82,7 @@ def GetDefaultParams():
         addComponentsIntervals=1 # in initial NMF phase, add new component every updateLambdaIntervals*addComponentsIntervals iterations
         updateRhoIntervals=1 # in main NMF phase, add new component every updateLambdaIntervals*updateRhoIntervals iterations
         Background_num=2 #number of background components - one of which at every repetion
-        bkg_per=0.2 # intialize of background shape at this percentile (over time) of video
+        bkg_per=20 # intialize of background shape at this percentile (over time) of video
         sig=(500,500,500) # estiamte size of neuron - bounding box is 3 times this size. If larger then data, we have no bounding box.
         
         NonNegative=True # should we constrain activity and shapes to be non-negative?

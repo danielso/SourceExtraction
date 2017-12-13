@@ -1,4 +1,5 @@
 # SourceExtraction
+Code for extracting axons and dendrite from Calcium data
 
 Installation:
 Requires Python 2.7 and 3.5.
@@ -8,7 +9,9 @@ Additional dependencies: all the WinPython libraries, tifffile... and maybe more
 
 Main files:
 
-Demo.py - main file for setting parameters and running everything. Run to see how code works.
+Simple_Demo.py - Run this to see how basic code works (on small 3D data sample).
+
+Demo.py - More advanced options and parameters for many datasets. Run to see how code works, in more detail.
 
 BlockLocalNMF.py - main script for running a single NMF repetition. LocalNMF code contains description of all input parameters.
 

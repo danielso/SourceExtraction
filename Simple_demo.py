@@ -30,8 +30,8 @@ from AuxilaryFunctions import GetCentersData,GetFileName
 #data=np.asarray(data,dtype='float')  
 #data=data-np.min(data, axis=0)# takes care of negative values (ands strong positive values) in each pixel
 
-#from pylab import load  
-#data=load('data_small')
+from pylab import load  
+data=load('data_small')
 
 #Get initialization for components center
 NumCent=10 # Max number of centers to import from Group Lasso intialization - if 0, we don't run group lasso
